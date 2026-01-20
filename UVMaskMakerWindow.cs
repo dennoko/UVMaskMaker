@@ -27,6 +27,8 @@ namespace Dennoko.UVTools
         private LocalizationService _localization;
         private PickingService _pickingService;
         private OverlayRenderer _overlayRenderer;
+        private MAScaleAdjusterService _maScaleService;
+        private SkinningSimulator _skinningSimulator;
         private UVPreviewDrawer _previewDrawer;
         private IMaskExporter _exporter;
 
@@ -97,6 +99,8 @@ namespace Dennoko.UVTools
             _localization.LoadLanguage(_settings.Language);
             _pickingService = new PickingService();
             _overlayRenderer = new OverlayRenderer();
+            _maScaleService = new MAScaleAdjusterService();
+            _skinningSimulator = new SkinningSimulator();
             _previewDrawer = new UVPreviewDrawer();
             _exporter = new PngExporter();
         }
@@ -111,6 +115,7 @@ namespace Dennoko.UVTools
             // Wire up target drawer events
             _targetDrawer.OnTargetChanged += SetTarget;
             _targetDrawer.OnBakedMeshChanged += OnBakedMeshOptionChanged;
+            _targetDrawer.OnRefreshClicked += () => BakeCurrentPoseAuto(true);
 
             // Wire up selection drawer events
             _selectionDrawer.OnAnalyzeClicked += AnalyzeTargetMesh;
@@ -312,7 +317,7 @@ namespace Dennoko.UVTools
             }
 
             Log($"[SetTarget] Target set to '{_targetGO.name}', Mesh='{_targetMesh.name}', VertexCount={_targetMesh.vertexCount}");
-            BakeCurrentPoseAuto();
+            BakeCurrentPoseAuto(false);
             AnalyzeTargetMesh();
             _pickingService.Initialize(_targetTransform, _targetMesh, _bakedMesh, _settings.UseBakedMesh);
         }
@@ -340,7 +345,7 @@ namespace Dennoko.UVTools
                 _previewDirty = true;
                 _overlayRenderer.InvalidateCache();
                 _previewDrawer.InvalidateLabelMap();
-                BakeCurrentPoseAuto();
+                BakeCurrentPoseAuto(false);
                 Repaint();
                 Log($"[Analyze] Found {_analysis.Islands.Count} UV islands, {_analysis.BorderEdges.Count} UV border edges");
             }
@@ -541,12 +546,38 @@ namespace Dennoko.UVTools
             }
         }
 
-        private void BakeCurrentPoseAuto()
+        private void BakeCurrentPoseAuto(bool applyOverrides = false)
         {
             if (!(_targetRenderer is SkinnedMeshRenderer smr)) return;
             if (_bakedMesh == null) _bakedMesh = new Mesh { name = $"{_targetMesh?.name}_Baked" };
             else _bakedMesh.Clear();
-            try { smr.BakeMesh(_bakedMesh); _overlayRenderer.InvalidateCache(); _pickingService.UpdateMesh(_bakedMesh, _settings.UseBakedMesh); }
+            
+            try 
+            {
+                bool baked = false;
+                if (applyOverrides)
+                {
+                    var overrides = _maScaleService.GetScaleOverrides(_targetGO);
+                    if (overrides.Count > 0)
+                    {
+                        Log($"[Bake] Applying MA Scale overrides for {overrides.Count} bones");
+                        _skinningSimulator.Bake(smr, _bakedMesh, overrides);
+                        baked = true;
+                    }
+                    else
+                    {
+                        Log("[Bake] No MA Scale Adjusters found");
+                    }
+                }
+
+                if (!baked)
+                {
+                    smr.BakeMesh(_bakedMesh); 
+                }
+                
+                _overlayRenderer.InvalidateCache(); 
+                _pickingService.UpdateMesh(_bakedMesh, _settings.UseBakedMesh); 
+            }
             catch { }
         }
 

@@ -28,6 +28,7 @@ namespace Dennoko.UVTools.UI
         /// Event fired when baked mesh option is changed.
         /// </summary>
         public event System.Action<bool> OnBakedMeshChanged;
+        public event System.Action OnRefreshClicked;
 
         /// <summary>
         /// Draws the target section.
@@ -77,6 +78,14 @@ namespace Dennoko.UVTools.UI
                 if (useBaked != settings.UseBakedMesh)
                 {
                     OnBakedMeshChanged?.Invoke(useBaked);
+                }
+
+                EditorGUILayout.Space(2);
+                if (EditorUIStyles.DrawSecondaryButton(
+                    _localization.Get("refresh_mesh_ma", "↻ Refresh Mesh (Apply MA)"), 
+                    _localization.Get("refresh_mesh_ma_tooltip", "Re-bake mesh applying Modular Avatar Scale Adjuster overrides")))
+                {
+                    OnRefreshClicked?.Invoke();
                 }
             }
 
