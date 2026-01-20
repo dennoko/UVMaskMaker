@@ -212,21 +212,24 @@ namespace Dennoko.UVTools.UI
 
                 using (new EditorGUI.DisabledScope(!settings.ChannelWriteEnabled))
                 {
+                    EditorGUIUtility.labelWidth = 80;
                     var newBase = EditorGUILayout.ObjectField(
                         new GUIContent(_localization["base_png"], _localization["base_png_tooltip"]),
-                        basePNG, typeof(Texture2D), false) as Texture2D;
+                        basePNG, typeof(Texture2D), false, GUILayout.MaxWidth(250)) as Texture2D;
+                    EditorGUIUtility.labelWidth = 0;
                     if (newBase != basePNG)
                     {
                         OnBasePNGChanged?.Invoke(newBase);
                     }
 
-                    EditorGUILayout.LabelField(_localization["write_channels"]);
                     using (new EditorGUILayout.HorizontalScope())
                     {
-                        bool r = EditorUIStyles.DrawToggle(settings.WriteR, "R", _localization["channel_r_tooltip"]);
-                        bool g = EditorUIStyles.DrawToggle(settings.WriteG, "G", _localization["channel_g_tooltip"]);
-                        bool b = EditorUIStyles.DrawToggle(settings.WriteB, "B", _localization["channel_b_tooltip"]);
-                        bool a = EditorUIStyles.DrawToggle(settings.WriteA, "A", _localization["channel_a_tooltip"]);
+                        EditorGUILayout.LabelField(_localization["write_channels"], GUILayout.Width(100));
+                        bool r = GUILayout.Toggle(settings.WriteR, "R", GUILayout.Width(30));
+                        bool g = GUILayout.Toggle(settings.WriteG, "G", GUILayout.Width(30));
+                        bool b = GUILayout.Toggle(settings.WriteB, "B", GUILayout.Width(30));
+                        bool a = GUILayout.Toggle(settings.WriteA, "A", GUILayout.Width(30));
+                        GUILayout.FlexibleSpace();
 
                         if (r != settings.WriteR || g != settings.WriteG || b != settings.WriteB || a != settings.WriteA)
                         {

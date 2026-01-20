@@ -376,15 +376,16 @@ namespace Dennoko.UVTools
             if (islandIdx < 0) return;
             if (_analysis == null) return;
 
-            if (_settings.AddMode)
-                _selectedIslands.Add(islandIdx);
-            else
+            // Toggle selection regardless of mode (preview clicks are precise)
+            if (_selectedIslands.Contains(islandIdx))
                 _selectedIslands.Remove(islandIdx);
+            else
+                _selectedIslands.Add(islandIdx);
 
             _previewDirty = true;
             Repaint();
             SceneView.RepaintAll();
-            Log($"[PreviewClick] island={islandIdx} {(_settings.AddMode ? "ADD" : "REMOVE")}");
+            Log($"[PreviewClick] island={islandIdx} TOGGLE → {(_selectedIslands.Contains(islandIdx) ? "SELECTED" : "DESELECTED")}");
         }
 
         private Texture GetBaseTexture()
