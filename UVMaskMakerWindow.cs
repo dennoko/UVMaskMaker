@@ -127,6 +127,8 @@ namespace Dennoko.UVTools
             _exportDrawer.OnSaveInvertedChanged += val => { _settings.SaveInvertedToo = val; _settingsManager.Save(_settings); };
             _exportDrawer.OnInvertMaskChanged += val => { _settings.InvertMask = val; _previewDirty = true; _settingsManager.Save(_settings); };
             _exportDrawer.OnPixelMarginChanged += val => { _settings.PixelMargin = val; _previewDirty = true; _settingsManager.Save(_settings); };
+            _exportDrawer.OnUseTextureFolderChanged += val => { _settings.UseTextureFolder = val; _settingsManager.Save(_settings); };
+            _exportDrawer.OnUseEnglishChanged += OnLanguageChanged;
 
             // Wire up advanced drawer events
             WireAdvancedDrawerEvents();
@@ -177,6 +179,7 @@ namespace Dennoko.UVTools
             SceneView.duringSceneGui -= OnSceneGUI;
             EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
             EditorSceneManager.sceneSaving -= OnSceneSaving;
+            if (_settingsManager != null && _settings != null) _settingsManager.Save(_settings);
 
             _pickingService?.Dispose();
             if (_previewDrawer != null)
@@ -421,6 +424,14 @@ namespace Dennoko.UVTools
             SceneView.RepaintAll();
         }
 
+        private void OnLanguageChanged(bool useEnglish)
+        {
+            _settings.UseEnglish = useEnglish;
+            _settings.Language = useEnglish ? "en" : "ja";
+            _localization.LoadLanguage(_settings.Language);
+            RequestRepaint();
+        }
+
         private void SaveMaskPNG()
         {
             if (_analysis == null)
@@ -429,18 +440,27 @@ namespace Dennoko.UVTools
                 return;
             }
 
-            if (!AssetDatabase.IsValidFolder(_settings.OutputDir))
+            string targetDir = _settings.OutputDir;
+            if (_settings.UseTextureFolder)
             {
-                UVMaskExport.EnsureAssetFolderPath(_settings.OutputDir);
+                string texPath = GetBaseTexturePath();
+                if (!string.IsNullOrEmpty(texPath))
+                {
+                    targetDir = Path.GetDirectoryName(texPath);
+                }
             }
 
-            string path = EditorUtility.SaveFilePanelInProject(
-                _localization["file_dialog_save_mask"],
-                _exportDrawer.FileName,
-                "png",
-                _localization["file_dialog_save_mask_msg"],
-                _settings.OutputDir);
-            if (string.IsNullOrEmpty(path)) return;
+            if (!AssetDatabase.IsValidFolder(targetDir))
+            {
+                UVMaskExport.EnsureAssetFolderPath(targetDir);
+            }
+
+            string fileName = _exportDrawer.FileName;
+            if (string.IsNullOrEmpty(fileName)) fileName = "uv_mask";
+            if (!fileName.EndsWith(".png")) fileName += ".png";
+
+            string fullPath = Path.Combine(targetDir, fileName).Replace('\\', '/');
+            fullPath = AssetDatabase.GenerateUniqueAssetPath(fullPath);
 
             var exportSettings = new ExportSettings
             {
@@ -455,9 +475,11 @@ namespace Dennoko.UVTools
                 BasePNG = _basePNG
             };
 
-            if (_exporter.Export(_analysis, _selectedIslands, exportSettings, path))
+            if (_exporter.Export(_analysis, _selectedIslands, exportSettings, fullPath))
             {
-                Log($"[Save] Wrote PNG {path}");
+                Log($"[Save] Wrote PNG {fullPath}");
+                var obj = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(fullPath);
+                if (obj != null) EditorGUIUtility.PingObject(obj);
 
                 if (_settings.SaveInvertedToo)
                 {
@@ -474,19 +496,18 @@ namespace Dennoko.UVTools
                         BasePNG = _basePNG
                     };
 
-                    string dir = Path.GetDirectoryName(path);
-                    string nameNoExt = Path.GetFileNameWithoutExtension(path);
+                    string dir = Path.GetDirectoryName(fullPath);
+                    string nameNoExt = Path.GetFileNameWithoutExtension(fullPath);
                     string invertedPath = Path.Combine(dir, nameNoExt + "_inv.png").Replace('\\', '/');
-
+                    
                     if (_exporter.Export(_analysis, _selectedIslands, invertedSettings, invertedPath))
                     {
-                        Log($"[Save] Wrote inverted PNG {invertedPath}");
+                        Log($"[Save] Wrote Inverted PNG {invertedPath}");
                     }
                 }
-
-                RevealSaved(path);
             }
         }
+
 
         private void BakeMaskToVertexColors()
         {
@@ -566,6 +587,12 @@ namespace Dennoko.UVTools
         #endregion
 
         #region Utilities
+
+        private void RequestRepaint()
+        {
+            Repaint();
+            SceneView.RepaintAll();
+        }
 
         private static void RevealSaved(string path)
         {

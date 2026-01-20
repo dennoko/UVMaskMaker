@@ -46,7 +46,9 @@ namespace Dennoko.UVTools.Services
             public const string AdvancedOptionsFoldout = Prefix + "AdvancedOptionsFoldout";
             public const string ChannelWriteFoldout = Prefix + "ChannelWriteFoldout";
             public const string Language = Prefix + "Language";
+            public const string UseEnglish = Prefix + "UseEnglish";
             public const string SaveInvertedToo = Prefix + "SaveInvertedToo";
+            public const string UseTextureFolder = Prefix + "UseTextureFolder";
         }
 
         /// <summary>
@@ -80,7 +82,9 @@ namespace Dennoko.UVTools.Services
             settings.AdvancedOptionsFoldout = EditorPrefs.GetBool(Keys.AdvancedOptionsFoldout, false);
             settings.ChannelWriteFoldout = EditorPrefs.GetBool(Keys.ChannelWriteFoldout, false);
             settings.Language = EditorPrefs.GetString(Keys.Language, "ja");
+            settings.UseEnglish = EditorPrefs.GetBool(Keys.UseEnglish, false);
             settings.SaveInvertedToo = EditorPrefs.GetBool(Keys.SaveInvertedToo, false);
+            settings.UseTextureFolder = EditorPrefs.GetBool(Keys.UseTextureFolder, false);
 
             // Load colors (stored as hex strings)
             settings.SelectedSceneColor = LoadColor(Keys.SelectedSceneColor, new Color(0f, 1f, 1f, 1f));
@@ -119,7 +123,9 @@ namespace Dennoko.UVTools.Services
             EditorPrefs.SetBool(Keys.AdvancedOptionsFoldout, settings.AdvancedOptionsFoldout);
             EditorPrefs.SetBool(Keys.ChannelWriteFoldout, settings.ChannelWriteFoldout);
             EditorPrefs.SetString(Keys.Language, settings.Language);
+            EditorPrefs.SetBool(Keys.UseEnglish, settings.UseEnglish);
             EditorPrefs.SetBool(Keys.SaveInvertedToo, settings.SaveInvertedToo);
+            EditorPrefs.SetBool(Keys.UseTextureFolder, settings.UseTextureFolder);
 
             // Save colors as hex strings
             SaveColor(Keys.SelectedSceneColor, settings.SelectedSceneColor);

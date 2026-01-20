@@ -29,6 +29,7 @@ namespace Dennoko.UVTools.UI
         public event System.Action<bool> OnInvertMaskChanged;
         public event System.Action<int> OnPixelMarginChanged;
         public event System.Action<bool> OnUseTextureFolderChanged;
+        public event System.Action<bool> OnUseEnglishChanged;
 
         public string FileName
         {
@@ -71,12 +72,71 @@ namespace Dennoko.UVTools.UI
                     _fileName);
             }
 
-            // Output folder with drag-and-drop
-            DrawOutputFolderSection(settings, baseTexturePath);
+            EditorGUILayout.Space(2);
+
+            // Output folder section
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                // Left side: Path field and browse button
+                using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
+                {
+                    // Drag-and-drop area for folder/file
+                    var dropRect = GUILayoutUtility.GetRect(0, 24, GUILayout.ExpandWidth(true));
+                    var dropStyle = new GUIStyle(EditorStyles.helpBox)
+                    {
+                        alignment = TextAnchor.MiddleCenter,
+                        fontSize = 10
+                    };
+                    GUI.Box(dropRect, _localization.Get("output_folder_drop_hint", "フォルダまたは画像をドロップ"), dropStyle);
+                    HandleFolderDragAndDrop(dropRect);
+
+                    // Output folder row
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        EditorGUILayout.LabelField(
+                            new GUIContent(_localization["output_folder"], _localization["output_folder_tooltip"]),
+                            GUILayout.Width(80));
+
+                        GUI.enabled = !settings.UseTextureFolder;
+                        EditorGUILayout.TextField(settings.OutputDir);
+                        GUI.enabled = true;
+
+                        if (GUILayout.Button(
+                            new GUIContent(_localization["browse"], _localization["browse_tooltip"]),
+                            EditorUIStyles.SmallButtonStyle, GUILayout.Width(50)))
+                        {
+                            var selected = EditorUtility.OpenFolderPanel(
+                                _localization["folder_dialog_select"],
+                                settings.OutputDir, "");
+
+                            if (!string.IsNullOrEmpty(selected))
+                            {
+                                SetOutputFolder(selected);
+                            }
+                        }
+                    }
+                }
+            }
 
             EditorGUILayout.Space(2);
 
-            // Quick options row
+            // Options checkboxes: UseTextureFolder
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                bool useTexFolder = EditorUIStyles.DrawToggle(
+                    settings.UseTextureFolder,
+                    _localization.Get("use_texture_folder_tooltip", "メインテクスチャのフォルダを使用"),
+                    _localization.Get("use_texture_folder_tooltip", "メインテクスチャのフォルダを使用"));
+                
+                if (useTexFolder != settings.UseTextureFolder)
+                {
+                    OnUseTextureFolderChanged?.Invoke(useTexFolder);
+                }
+            }
+
+            EditorGUILayout.Space(2);
+
+            // Quick options: Invert Mask
             using (new EditorGUILayout.HorizontalScope())
             {
                 bool inv = EditorUIStyles.DrawToggle(
@@ -89,6 +149,7 @@ namespace Dennoko.UVTools.UI
                 }
             }
 
+            // Save Inverted
             using (new EditorGUILayout.HorizontalScope())
             {
                 bool saveInv = EditorUIStyles.DrawToggle(
@@ -98,6 +159,19 @@ namespace Dennoko.UVTools.UI
                 if (saveInv != settings.SaveInvertedToo)
                 {
                     OnSaveInvertedChanged?.Invoke(saveInv);
+                }
+            }
+
+            // Language settings
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                bool english = EditorUIStyles.DrawToggle(
+                    settings.UseEnglish,
+                    "Enable English Mode",
+                    "Switch UI language to English");
+                if (english != settings.UseEnglish)
+                {
+                    OnUseEnglishChanged?.Invoke(english);
                 }
             }
 
@@ -129,61 +203,6 @@ namespace Dennoko.UVTools.UI
             GUI.enabled = true;
 
             EditorUIStyles.EndCard();
-        }
-
-        private void DrawOutputFolderSection(MaskSettings settings, string baseTexturePath)
-        {
-            // Drag-and-drop area for folder/file
-            var dropRect = GUILayoutUtility.GetRect(0, 24, GUILayout.ExpandWidth(true));
-            var dropStyle = new GUIStyle(EditorStyles.helpBox)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 10
-            };
-            GUI.Box(dropRect, _localization.Get("output_folder_drop_hint", "フォルダまたは画像をドロップ"), dropStyle);
-            HandleFolderDragAndDrop(dropRect);
-
-            // Output folder row
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                EditorGUILayout.LabelField(
-                    new GUIContent(_localization["output_folder"], _localization["output_folder_tooltip"]),
-                    GUILayout.Width(80));
-
-                EditorGUILayout.TextField(settings.OutputDir);
-
-                if (GUILayout.Button(
-                    new GUIContent(_localization["browse"], _localization["browse_tooltip"]),
-                    EditorUIStyles.SmallButtonStyle, GUILayout.Width(50)))
-                {
-                    var selected = EditorUtility.OpenFolderPanel(
-                        _localization["folder_dialog_select"],
-                        settings.OutputDir, "");
-
-                    if (!string.IsNullOrEmpty(selected))
-                    {
-                        SetOutputFolder(selected);
-                    }
-                }
-
-                // Auto-detect from texture button
-                bool hasBaseTexture = !string.IsNullOrEmpty(baseTexturePath);
-                GUI.enabled = hasBaseTexture;
-                if (GUILayout.Button(
-                    new GUIContent("📁", _localization.Get("use_texture_folder_tooltip", "メインテクスチャのフォルダを使用")),
-                    EditorUIStyles.SmallButtonStyle, GUILayout.Width(28)))
-                {
-                    if (hasBaseTexture)
-                    {
-                        string texDir = Path.GetDirectoryName(baseTexturePath);
-                        if (!string.IsNullOrEmpty(texDir))
-                        {
-                            OnOutputDirChanged?.Invoke(texDir.Replace('\\', '/'));
-                        }
-                    }
-                }
-                GUI.enabled = true;
-            }
         }
 
         private void HandleFolderDragAndDrop(Rect dropRect)

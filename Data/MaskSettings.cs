@@ -15,6 +15,7 @@ namespace Dennoko.UVTools.Data
         public int PixelMargin = 2;
         public bool InvertMask = false;
         public bool SaveInvertedToo = false;  // Save both normal and inverted mask
+        public bool UseTextureFolder = false;  // Use main texture folder for output
         public string OutputDir = "Assets/GeneratedMasks";
         public string FileName = "uv_mask";
 
@@ -62,6 +63,7 @@ namespace Dennoko.UVTools.Data
 
         // Language setting
         public string Language = "ja";
+        public bool UseEnglish = false;  // Enable English Mode
 
         /// <summary>
         /// Creates a copy of the current settings.
