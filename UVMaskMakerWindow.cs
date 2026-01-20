@@ -215,7 +215,7 @@ namespace Dennoko.UVTools
 
             // Export section (always visible, with basic options)
             _exportDrawer.FileName = _targetGO != null ? _targetGO.name + "_mask" : "uv_mask";
-            _exportDrawer.Draw(_settings, _analysis != null);
+            _exportDrawer.Draw(_settings, _analysis != null, GetBaseTexturePath());
 
             EditorGUILayout.Space(8);
 
@@ -400,6 +400,13 @@ namespace Dennoko.UVTools
                 if (m.HasProperty("_MainTex")) { var t = m.GetTexture("_MainTex"); if (t != null) return t; }
             }
             return null;
+        }
+
+        private string GetBaseTexturePath()
+        {
+            var tex = GetBaseTexture();
+            if (tex == null) return null;
+            return AssetDatabase.GetAssetPath(tex);
         }
 
         private void ToggleAddRemoveMode(SceneView sv)

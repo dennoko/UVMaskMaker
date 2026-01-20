@@ -115,5 +115,7 @@
     "preview_click_hint": "Click to select islands",
     "save_inverted_too": "Also save inverted mask",
     "save_inverted_too_tooltip": "Save inverted mask alongside the normal mask (filename_inv.png).",
+    "output_folder_drop_hint": "Drop folder or image here",
+    "use_texture_folder_tooltip": "Use main texture folder",
     "ok": "OK"
 }

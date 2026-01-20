@@ -115,5 +115,7 @@
     "preview_click_hint": "クリックでアイランドを選択できます",
     "save_inverted_too": "反転マスクも同時に保存",
     "save_inverted_too_tooltip": "通常のマスクに加え、反転したマスクも同時に保存します（ファイル名_inv.png）。",
+    "output_folder_drop_hint": "フォルダまたは画像をドロップ",
+    "use_texture_folder_tooltip": "メインテクスチャのフォルダを使用",
     "ok": "OK"
 }
