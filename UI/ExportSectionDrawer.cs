@@ -29,7 +29,6 @@ namespace Dennoko.UVTools.UI
         public event System.Action<bool> OnInvertMaskChanged;
         public event System.Action<int> OnPixelMarginChanged;
         public event System.Action<bool> OnUseTextureFolderChanged;
-        public event System.Action<bool> OnUseEnglishChanged;
 
         public string FileName
         {
@@ -162,18 +161,7 @@ namespace Dennoko.UVTools.UI
                 }
             }
 
-            // Language settings
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                bool english = EditorUIStyles.DrawToggle(
-                    settings.UseEnglish,
-                    "Enable English Mode",
-                    "Switch UI language to English");
-                if (english != settings.UseEnglish)
-                {
-                    OnUseEnglishChanged?.Invoke(english);
-                }
-            }
+
 
             // Pixel margin
             using (new EditorGUILayout.HorizontalScope())

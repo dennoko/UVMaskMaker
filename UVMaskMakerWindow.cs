@@ -128,7 +128,6 @@ namespace Dennoko.UVTools
             _exportDrawer.OnInvertMaskChanged += val => { _settings.InvertMask = val; _previewDirty = true; _settingsManager.Save(_settings); };
             _exportDrawer.OnPixelMarginChanged += val => { _settings.PixelMargin = val; _previewDirty = true; _settingsManager.Save(_settings); };
             _exportDrawer.OnUseTextureFolderChanged += val => { _settings.UseTextureFolder = val; _settingsManager.Save(_settings); };
-            _exportDrawer.OnUseEnglishChanged += OnLanguageChanged;
 
             // Wire up advanced drawer events
             WireAdvancedDrawerEvents();
@@ -157,6 +156,7 @@ namespace Dennoko.UVTools
             _advancedDrawer.OnBakeVertexColorClicked += BakeMaskToVertexColors;
             _advancedDrawer.OnBaseVCMeshChanged += m => { _baseVCMesh = m; _settingsManager.SetBaseVCMeshPath(m ? AssetDatabase.GetAssetPath(m) : ""); };
             _advancedDrawer.OnOverwriteExistingChanged += v => { _settings.OverwriteExistingVC = v; _settingsManager.Save(_settings); };
+            _advancedDrawer.OnUseEnglishChanged += OnLanguageChanged;
         }
 
         private void LoadAssetReferences()
@@ -187,6 +187,7 @@ namespace Dennoko.UVTools
                 _previewDrawer.OnIslandClicked -= OnPreviewIslandClicked;
                 _previewDrawer.Dispose();
             }
+            if (_advancedDrawer != null) _advancedDrawer.OnUseEnglishChanged -= OnLanguageChanged;
 
             if (_bakedMesh != null)
             {
@@ -226,6 +227,7 @@ namespace Dennoko.UVTools
             _advancedDrawer.DrawOverlaySection(_settings, GetBaseTexture());
             _advancedDrawer.DrawChannelWriteSection(_settings, _basePNG);
             _advancedDrawer.DrawVertexColorSection(_settings, _baseVCMesh, _analysis != null);
+            _advancedDrawer.DrawPreferencesSection(_settings);
 
             EditorGUILayout.Space(8);
 

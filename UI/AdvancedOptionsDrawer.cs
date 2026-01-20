@@ -48,6 +48,9 @@ namespace Dennoko.UVTools.UI
         public event System.Action<Mesh> OnBaseVCMeshChanged;
         public event System.Action<bool> OnOverwriteExistingChanged;
 
+        // Preferences events
+        public event System.Action<bool> OnUseEnglishChanged;
+
         /// <summary>
         /// Draws scene overlay options (collapsible).
         /// </summary>
@@ -280,6 +283,29 @@ namespace Dennoko.UVTools.UI
                     OnBakeVertexColorClicked?.Invoke();
                 }
                 GUI.enabled = true;
+            }
+        }
+
+        /// <summary>
+        /// Draws application preferences (collapsible).
+        /// </summary>
+        public void DrawPreferencesSection(MaskSettings settings)
+        {
+            // Always show preferences without a foldout (or use one if desired)
+            // For now, let's keep it simple at the bottom of advanced options
+            EditorUIStyles.DrawSeparator();
+            EditorGUILayout.LabelField(_localization.Get("preferences", "Environment Settings"), EditorStyles.boldLabel);
+
+            using (new EditorGUI.IndentLevelScope())
+            {
+                bool english = EditorUIStyles.DrawToggle(
+                    settings.UseEnglish,
+                    "Enable English Mode",
+                    "Switch UI language to English");
+                if (english != settings.UseEnglish)
+                {
+                    OnUseEnglishChanged?.Invoke(english);
+                }
             }
         }
     }
