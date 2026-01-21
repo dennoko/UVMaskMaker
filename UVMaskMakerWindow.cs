@@ -117,7 +117,6 @@ namespace Dennoko.UVTools
             // Wire up target drawer events
             _targetDrawer.OnTargetChanged += SetTarget;
             _targetDrawer.OnBakedMeshChanged += OnBakedMeshOptionChanged;
-            _targetDrawer.OnRefreshClicked += () => BakeCurrentPoseAuto(true);
             _targetDrawer.OnSetupWorkCopyClicked += SetupWorkCopy;
             _targetDrawer.OnCleanupWorkCopyClicked += CleanupWorkCopy;
 
@@ -601,7 +600,7 @@ namespace Dennoko.UVTools
             }
         }
 
-        private void BakeCurrentPoseAuto(bool force = false)
+        private void BakeCurrentPoseAuto()
         {
             if (!(_targetRenderer is SkinnedMeshRenderer smr)) return;
             if (_bakedMesh == null) _bakedMesh = new Mesh { name = $"{_targetMesh?.name}_Baked" };

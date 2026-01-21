@@ -28,7 +28,6 @@ namespace Dennoko.UVTools.UI
         /// Event fired when baked mesh option is changed.
         /// </summary>
         public event System.Action<bool> OnBakedMeshChanged;
-        public event System.Action OnRefreshClicked;
         public event System.Action OnSetupWorkCopyClicked;
         public event System.Action OnCleanupWorkCopyClicked;
 
@@ -82,14 +81,6 @@ namespace Dennoko.UVTools.UI
                     if (useBaked != settings.UseBakedMesh)
                     {
                         OnBakedMeshChanged?.Invoke(useBaked);
-                    }
-
-                    EditorGUILayout.Space(2);
-                    if (EditorUIStyles.DrawSecondaryButton(
-                        _localization.Get("refresh_mesh_ma", "↻ Refresh Mesh (Apply MA)"), 
-                        _localization.Get("refresh_mesh_ma_tooltip", "Re-bake mesh applying Scale Adjuster overrides")))
-                    {
-                        OnRefreshClicked?.Invoke();
                     }
 
                     EditorGUILayout.Space(2);
