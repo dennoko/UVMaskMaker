@@ -119,5 +119,18 @@
     "save_inverted_too_tooltip": "Save inverted mask alongside the normal mask (filename_inv.png).",
     "output_folder_drop_hint": "Drop folder or image here",
     "use_texture_folder_tooltip": "Use main texture folder",
+    "edit_mode": "Edit Mode",
+    "selection_actions": "Selection Actions",
+    "quick_export": "Quick Export",
+    "output_settings": "Output Settings",
+    "output_settings_tooltip": "File name, output folder, and other detailed settings",
+    "preferences": "Preferences",
+    "enable_english": "Enable English Mode",
+    "enable_english_tooltip": "Switch UI language to English",
+    "setup_work_copy": "Setup Work Copy",
+    "setup_work_copy_tooltip": "Create a temporary static mesh copy to work on, avoiding deformation issues.",
+    "cleanup_work_copy": "Cleanup Work Copy",
+    "cleanup_work_copy_tooltip": "Delete work copy and revert to original target.",
+    "work_copy_active_msg": "Work Copy Active. Original mesh is safe.",
     "ok": "OK"
 }

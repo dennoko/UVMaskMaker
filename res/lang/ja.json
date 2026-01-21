@@ -119,5 +119,18 @@
     "save_inverted_too_tooltip": "通常のマスクに加え、反転したマスクも同時に保存します（ファイル名_inv.png）。",
     "output_folder_drop_hint": "フォルダまたは画像をドロップ",
     "use_texture_folder_tooltip": "メインテクスチャのフォルダを使用",
+    "edit_mode": "編集モード",
+    "selection_actions": "選択操作",
+    "quick_export": "クイックエクスポート",
+    "output_settings": "出力設定",
+    "output_settings_tooltip": "ファイル名、出力先などの詳細設定",
+    "preferences": "環境設定",
+    "enable_english": "Enable English Mode",
+    "enable_english_tooltip": "UIの言語を英語に切り替えます",
+    "setup_work_copy": "ワークコピーを作成",
+    "setup_work_copy_tooltip": "変形の影響を受けない静止メッシュの作業用コピーを作成します。",
+    "cleanup_work_copy": "コピーを削除して戻る",
+    "cleanup_work_copy_tooltip": "作業用コピーを削除し、元のオブジェクトに戻ります。",
+    "work_copy_active_msg": "ワークコピーを使用中。元のメッシュは変更されません。",
     "ok": "OK"
 }

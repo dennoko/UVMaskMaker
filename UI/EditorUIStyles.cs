@@ -17,6 +17,16 @@ namespace Dennoko.UVTools.UI
         private static readonly Color AccentColor = new Color(0.4f, 0.8f, 0.4f, 1f);
         private static readonly Color BorderColor = new Color(0.35f, 0.35f, 0.35f, 1f);
 
+        // Standard spacing constants
+        /// <summary>Space between cards/sections</summary>
+        public const float CardSpacing = 8f;
+        /// <summary>Space within cards between elements</summary>
+        public const float InnerSpacing = 4f;
+        /// <summary>Larger space between major sections</summary>
+        public const float SectionSpacing = 12f;
+        /// <summary>Space between buttons in a row</summary>
+        public const float ButtonSpacing = 4f;
+
         // Cached styles
         private static GUIStyle _cardStyle;
         private static GUIStyle _sectionHeaderStyle;

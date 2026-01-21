@@ -51,6 +51,7 @@ namespace Dennoko.UVTools.UI
         // Preferences events
         public event System.Action<bool> OnUseEnglishChanged;
         public event System.Action<Vector3> OnWorkCopyOffsetChanged;
+        public event System.Action<KeyCode> OnHotkeyChanged;
         public event System.Action<bool> OnAutoWorkCopyChanged;
 
         /// <summary>
@@ -293,23 +294,54 @@ namespace Dennoko.UVTools.UI
         /// </summary>
         public void DrawPreferencesSection(MaskSettings settings)
         {
-            // Always show preferences without a foldout (or use one if desired)
-            // For now, let's keep it simple at the bottom of advanced options
             EditorUIStyles.DrawSeparator();
-            EditorGUILayout.LabelField(_localization.Get("preferences", "Environment Settings"), EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(_localization.Get("preferences", "環境設定"), EditorStyles.boldLabel);
 
             using (new EditorGUI.IndentLevelScope())
             {
+                // Language toggle
                 bool english = EditorUIStyles.DrawToggle(
                     settings.UseEnglish,
-                    "Enable English Mode",
-                    "Switch UI language to English");
+                    _localization.Get("enable_english", "Enable English Mode"),
+                    _localization.Get("enable_english_tooltip", "Switch UI language to English"));
                 if (english != settings.UseEnglish)
                 {
                     OnUseEnglishChanged?.Invoke(english);
                 }
 
-                EditorGUILayout.Space(2);
+                EditorGUILayout.Space(EditorUIStyles.InnerSpacing);
+
+                // Hotkey configuration (moved from SelectionSectionDrawer)
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUILayout.LabelField(
+                        new GUIContent(_localization["toggle_hotkey_label"], _localization["toggle_hotkey_tooltip"]),
+                        GUILayout.Width(120));
+
+                    var toggleStr = EditorGUILayout.TextField(settings.ModeToggleHotkey.ToString(), GUILayout.Width(60));
+                    if (System.Enum.TryParse<KeyCode>(toggleStr, out var toggleParsed) && toggleParsed != settings.ModeToggleHotkey)
+                    {
+                        OnHotkeyChanged?.Invoke(toggleParsed);
+                    }
+                    
+                    GUILayout.FlexibleSpace();
+                }
+
+                EditorGUILayout.Space(EditorUIStyles.InnerSpacing);
+
+                // Auto Work Copy toggle
+                bool autoWC = EditorUIStyles.DrawToggle(
+                    settings.AutoWorkCopy,
+                    _localization["auto_work_copy"],
+                    _localization["auto_work_copy_tooltip"]);
+                if (autoWC != settings.AutoWorkCopy)
+                {
+                    OnAutoWorkCopyChanged?.Invoke(autoWC);
+                }
+
+                EditorGUILayout.Space(EditorUIStyles.InnerSpacing);
+
+                // Work Copy Offset
                 Vector3 newOffset = EditorGUILayout.Vector3Field(
                     new GUIContent(_localization.Get("work_copy_offset", "Work Copy Offset"), _localization.Get("work_copy_offset_tooltip", "Position offset for the work copy object")),
                     settings.WorkCopyOffset);

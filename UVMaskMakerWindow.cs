@@ -34,6 +34,7 @@ namespace Dennoko.UVTools
         // UI Drawers
         private TargetSectionDrawer _targetDrawer;
         private SelectionSectionDrawer _selectionDrawer;
+        private SelectionActionsDrawer _selectionActionsDrawer;
         private ExportSectionDrawer _exportDrawer;
         private AdvancedOptionsDrawer _advancedDrawer;
 
@@ -112,6 +113,7 @@ namespace Dennoko.UVTools
         {
             _targetDrawer = new TargetSectionDrawer(_localization);
             _selectionDrawer = new SelectionSectionDrawer(_localization);
+            _selectionActionsDrawer = new SelectionActionsDrawer(_localization);
             _exportDrawer = new ExportSectionDrawer(_localization);
             _advancedDrawer = new AdvancedOptionsDrawer(_localization);
 
@@ -121,13 +123,14 @@ namespace Dennoko.UVTools
             _targetDrawer.OnSetupWorkCopyClicked += SetupWorkCopy;
             _targetDrawer.OnCleanupWorkCopyClicked += CleanupWorkCopy;
 
-            // Wire up selection drawer events
-            _selectionDrawer.OnAnalyzeClicked += AnalyzeTargetMesh;
-            _selectionDrawer.OnInvertClicked += InvertSelection;
-            _selectionDrawer.OnSelectAllClicked += SelectAll;
-            _selectionDrawer.OnClearClicked += ClearSelection;
+            // Wire up selection drawer events (mode only)
             _selectionDrawer.OnModeChanged += mode => { _settings.AddMode = mode; _settingsManager.Save(_settings); };
-            _selectionDrawer.OnHotkeyChanged += key => { _settings.ModeToggleHotkey = key; _settingsManager.Save(_settings); };
+
+            // Wire up selection actions drawer events
+            _selectionActionsDrawer.OnAnalyzeClicked += AnalyzeTargetMesh;
+            _selectionActionsDrawer.OnInvertClicked += InvertSelection;
+            _selectionActionsDrawer.OnSelectAllClicked += SelectAll;
+            _selectionActionsDrawer.OnClearClicked += ClearSelection;
 
             // Wire up export drawer events
             _exportDrawer.OnSaveClicked += SaveMaskPNG;
@@ -167,6 +170,7 @@ namespace Dennoko.UVTools
             _advancedDrawer.OnOverwriteExistingChanged += v => { _settings.OverwriteExistingVC = v; _settingsManager.Save(_settings); };
             _advancedDrawer.OnWorkCopyOffsetChanged += v => { _settings.WorkCopyOffset = v; _settingsManager.Save(_settings); };
             _advancedDrawer.OnAutoWorkCopyChanged += v => { _settings.AutoWorkCopy = v; _settingsManager.Save(_settings); };
+            _advancedDrawer.OnHotkeyChanged += key => { _settings.ModeToggleHotkey = key; _settingsManager.Save(_settings); };
             _advancedDrawer.OnUseEnglishChanged += OnLanguageChanged;
         }
 
@@ -217,24 +221,35 @@ namespace Dennoko.UVTools
             HandleHotkey();
 
             _scrollPos = EditorGUILayout.BeginScrollView(_scrollPos);
-            EditorGUILayout.Space(4);
+            EditorGUILayout.Space(EditorUIStyles.CardSpacing);
 
             // Target section (always visible)
             _targetDrawer.Draw(_targetGO, _targetRenderer, _settings, _isWorkCopy);
 
+            EditorGUILayout.Space(EditorUIStyles.CardSpacing);
+
+            // Edit Mode section (Add/Remove toggle)
+            _selectionDrawer.Draw(_settings);
+
+            EditorGUILayout.Space(EditorUIStyles.CardSpacing);
+
             // Preview section
             DrawPreview();
 
-            // Selection section (always visible)
-            _selectionDrawer.Draw(_settings, _analysis != null);
+            EditorGUILayout.Space(EditorUIStyles.CardSpacing);
 
-            // Export section (always visible, with basic options)
+            // Selection Actions section (Analyze, Invert, Select All, Clear)
+            _selectionActionsDrawer.Draw(_analysis != null);
+
+            EditorGUILayout.Space(EditorUIStyles.CardSpacing);
+
+            // Export section (Quick Export + Output Settings)
             string fileName = _targetGO != null ? _targetGO.name : "uv_mask";
             if (_isWorkCopy && fileName.EndsWith(" [WorkCopy]")) fileName = fileName.Replace(" [WorkCopy]", "");
             _exportDrawer.FileName = fileName + "_mask";
             _exportDrawer.Draw(_settings, _analysis != null, GetBaseTexturePath());
 
-            EditorGUILayout.Space(8);
+            EditorGUILayout.Space(EditorUIStyles.SectionSpacing);
 
             // Advanced options (collapsed by default)
             _advancedDrawer.DrawOverlaySection(_settings, GetBaseTexture());
@@ -242,7 +257,7 @@ namespace Dennoko.UVTools
             _advancedDrawer.DrawVertexColorSection(_settings, _baseVCMesh, _analysis != null);
             _advancedDrawer.DrawPreferencesSection(_settings);
 
-            EditorGUILayout.Space(8);
+            EditorGUILayout.Space(EditorUIStyles.CardSpacing);
 
             // Help
             DrawHelpBox();

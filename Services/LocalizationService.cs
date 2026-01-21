@@ -90,6 +90,18 @@ namespace Dennoko.UVTools.Services
         }
 
         /// <summary>
+        /// Gets a localized string by key, with a default value fallback.
+        /// </summary>
+        public string Get(string key, string defaultValue)
+        {
+            if (_strings.TryGetValue(key, out var value))
+            {
+                return value;
+            }
+            return defaultValue;
+        }
+
+        /// <summary>
         /// Gets a localized string with format arguments.
         /// </summary>
         public string Get(string key, params object[] args)

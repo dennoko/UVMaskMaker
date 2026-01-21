@@ -1,4 +1,5 @@
 // ExportSectionDrawer.cs - Draws the export settings and save button
+// Refactored: Split into Quick Export (always visible) and Output Settings (collapsible)
 using System.IO;
 using UnityEditor;
 using UnityEngine;
@@ -8,13 +9,13 @@ using Dennoko.UVTools.Services;
 namespace Dennoko.UVTools.UI
 {
     /// <summary>
-    /// Draws the export section with resolution, file settings, and save button.
-    /// Supports drag-and-drop for output folder selection.
+    /// Draws the export section with Quick Export and collapsible Output Settings.
     /// </summary>
     public class ExportSectionDrawer
     {
         private readonly LocalizationService _localization;
         private string _fileName = "uv_mask";
+        private bool _outputSettingsExpanded = false;
 
         public ExportSectionDrawer(LocalizationService localization)
         {
@@ -37,138 +38,65 @@ namespace Dennoko.UVTools.UI
         }
 
         /// <summary>
-        /// Draws the export section.
+        /// Draws the export section (Quick Export + Output Settings).
         /// </summary>
-        /// <param name="settings">Current mask settings</param>
-        /// <param name="hasAnalysis">Whether analysis data is available</param>
-        /// <param name="baseTexturePath">Path to base texture for auto-folder detection (null if none)</param>
         public void Draw(MaskSettings settings, bool hasAnalysis, string baseTexturePath = null)
         {
-            EditorUIStyles.BeginCard(_localization["export_section"]);
+            // === Quick Export Section (always visible) ===
+            DrawQuickExportSection(settings, hasAnalysis);
 
-            // Resolution + File name row
+            EditorGUILayout.Space(EditorUIStyles.CardSpacing);
+
+            // === Output Settings Section (collapsible) ===
+            DrawOutputSettingsSection(settings, baseTexturePath);
+        }
+
+        private void DrawQuickExportSection(MaskSettings settings, bool hasAnalysis)
+        {
+            EditorUIStyles.BeginCard(_localization.Get("quick_export", "クイックエクスポート"));
+
+            // Resolution + Invert Mask row
             using (new EditorGUILayout.HorizontalScope())
             {
+                // Resolution
                 EditorGUILayout.LabelField(
                     new GUIContent(_localization["resolution"], _localization["resolution_tooltip"]),
-                    GUILayout.Width(60));
+                    GUILayout.Width(50));
 
                 int newSize = EditorGUILayout.IntPopup(
                     settings.TextureSize,
                     new[] { "512", "1024", "2048", "4096" },
                     new[] { 512, 1024, 2048, 4096 },
-                    GUILayout.Width(70));
+                    GUILayout.Width(60));
 
                 if (newSize != settings.TextureSize)
                 {
                     OnResolutionChanged?.Invoke(newSize);
                 }
 
-                GUILayout.Space(10);
+                GUILayout.Space(16);
 
-                _fileName = EditorGUILayout.TextField(
-                    new GUIContent(_localization["file_name"], _localization["file_name_tooltip"]),
-                    _fileName);
-            }
-
-            EditorGUILayout.Space(2);
-
-            // Output folder section
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                // Left side: Path field and browse button
-                using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
-                {
-                    // Drag-and-drop area for folder/file
-                    var dropRect = GUILayoutUtility.GetRect(0, 24, GUILayout.ExpandWidth(true));
-                    var dropStyle = new GUIStyle(EditorStyles.helpBox)
-                    {
-                        alignment = TextAnchor.MiddleCenter,
-                        fontSize = 10
-                    };
-                    GUI.Box(dropRect, _localization.Get("output_folder_drop_hint", "フォルダまたは画像をドロップ"), dropStyle);
-                    HandleFolderDragAndDrop(dropRect);
-
-                    // Output folder row
-                    using (new EditorGUILayout.HorizontalScope())
-                    {
-                        EditorGUILayout.LabelField(
-                            new GUIContent(_localization["output_folder"], _localization["output_folder_tooltip"]),
-                            GUILayout.Width(80));
-
-                        GUI.enabled = !settings.UseTextureFolder;
-                        EditorGUILayout.TextField(settings.OutputDir);
-                        GUI.enabled = true;
-
-                        if (GUILayout.Button(
-                            new GUIContent(_localization["browse"], _localization["browse_tooltip"]),
-                            EditorUIStyles.SmallButtonStyle, GUILayout.Width(50)))
-                        {
-                            var selected = EditorUtility.OpenFolderPanel(
-                                _localization["folder_dialog_select"],
-                                settings.OutputDir, "");
-
-                            if (!string.IsNullOrEmpty(selected))
-                            {
-                                SetOutputFolder(selected);
-                            }
-                        }
-                    }
-                }
-            }
-
-            EditorGUILayout.Space(2);
-
-            // Options checkboxes: UseTextureFolder
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                bool useTexFolder = EditorUIStyles.DrawToggle(
-                    settings.UseTextureFolder,
-                    _localization.Get("use_texture_folder_tooltip", "メインテクスチャのフォルダを使用"),
-                    _localization.Get("use_texture_folder_tooltip", "メインテクスチャのフォルダを使用"));
-                
-                if (useTexFolder != settings.UseTextureFolder)
-                {
-                    OnUseTextureFolderChanged?.Invoke(useTexFolder);
-                }
-            }
-
-            EditorGUILayout.Space(2);
-
-            // Quick options: Invert Mask
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                bool inv = EditorUIStyles.DrawToggle(
+                // Invert Mask toggle
+                bool inv = EditorGUILayout.ToggleLeft(
+                    new GUIContent(_localization["invert_mask"], _localization["invert_mask_tooltip"]),
                     settings.InvertMask,
-                    _localization["invert_mask"],
-                    _localization["invert_mask_tooltip"]);
+                    GUILayout.Width(180));
                 if (inv != settings.InvertMask)
                 {
                     OnInvertMaskChanged?.Invoke(inv);
                 }
+
+                GUILayout.FlexibleSpace();
             }
 
-            // Save Inverted
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                bool saveInv = EditorUIStyles.DrawToggle(
-                    settings.SaveInvertedToo,
-                    _localization["save_inverted_too"],
-                    _localization["save_inverted_too_tooltip"]);
-                if (saveInv != settings.SaveInvertedToo)
-                {
-                    OnSaveInvertedChanged?.Invoke(saveInv);
-                }
-            }
+            EditorGUILayout.Space(EditorUIStyles.InnerSpacing);
 
-
-
-            // Pixel margin
+            // Pixel margin slider
             using (new EditorGUILayout.HorizontalScope())
             {
                 EditorGUILayout.LabelField(
                     new GUIContent(_localization["pixel_margin"], _localization["pixel_margin_tooltip"]),
-                    GUILayout.Width(100));
+                    GUILayout.Width(90));
 
                 int newMargin = EditorGUILayout.IntSlider(settings.PixelMargin, 0, 16);
                 if (newMargin != settings.PixelMargin)
@@ -177,7 +105,7 @@ namespace Dennoko.UVTools.UI
                 }
             }
 
-            EditorGUILayout.Space(8);
+            EditorGUILayout.Space(EditorUIStyles.CardSpacing);
 
             // Save button (primary action)
             GUI.enabled = hasAnalysis;
@@ -191,6 +119,91 @@ namespace Dennoko.UVTools.UI
             GUI.enabled = true;
 
             EditorUIStyles.EndCard();
+        }
+
+        private void DrawOutputSettingsSection(MaskSettings settings, string baseTexturePath)
+        {
+            _outputSettingsExpanded = EditorUIStyles.DrawCollapsibleHeader(
+                "📁 " + _localization.Get("output_settings", "出力設定"),
+                _outputSettingsExpanded,
+                _localization.Get("output_settings_tooltip", "ファイル名、出力先などの詳細設定"));
+
+            if (!_outputSettingsExpanded) return;
+
+            using (new EditorGUI.IndentLevelScope())
+            using (new EditorGUILayout.VerticalScope(EditorUIStyles.CardStyle))
+            {
+                // File name
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUILayout.LabelField(
+                        new GUIContent(_localization["file_name"], _localization["file_name_tooltip"]),
+                        GUILayout.Width(80));
+
+                    _fileName = EditorGUILayout.TextField(_fileName);
+                }
+
+                EditorGUILayout.Space(EditorUIStyles.InnerSpacing);
+
+                // Drag-and-drop area for folder/file
+                var dropRect = GUILayoutUtility.GetRect(0, 24, GUILayout.ExpandWidth(true));
+                var dropStyle = new GUIStyle(EditorStyles.helpBox)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    fontSize = 10
+                };
+                GUI.Box(dropRect, _localization.Get("output_folder_drop_hint", "フォルダまたは画像をドロップ"), dropStyle);
+                HandleFolderDragAndDrop(dropRect);
+
+                // Output folder row
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUILayout.LabelField(
+                        new GUIContent(_localization["output_folder"], _localization["output_folder_tooltip"]),
+                        GUILayout.Width(80));
+
+                    GUI.enabled = !settings.UseTextureFolder;
+                    EditorGUILayout.TextField(settings.OutputDir);
+                    GUI.enabled = true;
+
+                    if (GUILayout.Button(
+                        new GUIContent(_localization["browse"], _localization["browse_tooltip"]),
+                        EditorUIStyles.SmallButtonStyle, GUILayout.Width(50)))
+                    {
+                        var selected = EditorUtility.OpenFolderPanel(
+                            _localization["folder_dialog_select"],
+                            settings.OutputDir, "");
+
+                        if (!string.IsNullOrEmpty(selected))
+                        {
+                            SetOutputFolder(selected);
+                        }
+                    }
+                }
+
+                EditorGUILayout.Space(EditorUIStyles.InnerSpacing);
+
+                // UseTextureFolder toggle
+                bool useTexFolder = EditorUIStyles.DrawToggle(
+                    settings.UseTextureFolder,
+                    _localization.Get("use_texture_folder_tooltip", "メインテクスチャのフォルダを使用"),
+                    _localization.Get("use_texture_folder_tooltip", "メインテクスチャのフォルダを使用"));
+
+                if (useTexFolder != settings.UseTextureFolder)
+                {
+                    OnUseTextureFolderChanged?.Invoke(useTexFolder);
+                }
+
+                // Save Inverted toggle
+                bool saveInv = EditorUIStyles.DrawToggle(
+                    settings.SaveInvertedToo,
+                    _localization["save_inverted_too"],
+                    _localization["save_inverted_too_tooltip"]);
+                if (saveInv != settings.SaveInvertedToo)
+                {
+                    OnSaveInvertedChanged?.Invoke(saveInv);
+                }
+            }
         }
 
         private void HandleFolderDragAndDrop(Rect dropRect)
