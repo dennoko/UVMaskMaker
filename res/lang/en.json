@@ -1,5 +1,5 @@
 {
-    "window_title": "UV Mask Maker",
+    "window_title": "MaskMaker",
     "target_model": "Target Model",
     "drag_drop_hint": "Drag a GameObject with MeshRenderer/SkinnedMeshRenderer here",
     "object_field_tooltip": "Specify a GameObject containing a MeshRenderer or SkinnedMeshRenderer.",

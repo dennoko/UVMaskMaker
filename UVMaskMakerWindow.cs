@@ -71,7 +71,7 @@ namespace Dennoko.UVTools
         private static string LogDir => Path.Combine(Application.dataPath, "../Logs/UVMaskMaker");
         private static string LogPath => Path.Combine(LogDir, "UVMaskMaker.log");
 
-        [MenuItem("Tools/UV Mask Maker")]
+        [MenuItem("Tools/MaskMaker")]
         public static void ShowWindow()
         {
             var wnd = GetWindow<UVMaskMakerWindow>();
@@ -229,7 +229,9 @@ namespace Dennoko.UVTools
             _selectionDrawer.Draw(_settings, _analysis != null);
 
             // Export section (always visible, with basic options)
-            _exportDrawer.FileName = _targetGO != null ? _targetGO.name + "_mask" : "uv_mask";
+            string fileName = _targetGO != null ? _targetGO.name : "uv_mask";
+            if (_isWorkCopy && fileName.EndsWith(" [WorkCopy]")) fileName = fileName.Replace(" [WorkCopy]", "");
+            _exportDrawer.FileName = fileName + "_mask";
             _exportDrawer.Draw(_settings, _analysis != null, GetBaseTexturePath());
 
             EditorGUILayout.Space(8);
@@ -272,8 +274,11 @@ namespace Dennoko.UVTools
             var e = Event.current;
             if (e != null && e.type == EventType.KeyDown && e.keyCode == _settings.ModeToggleHotkey && !EditorGUIUtility.editingTextField)
             {
-                ToggleAddRemoveMode(null);
-                e.Use();
+                if (_targetMesh != null)
+                {
+                    ToggleAddRemoveMode(null);
+                    e.Use();
+                }
             }
         }
 
@@ -652,8 +657,11 @@ namespace Dennoko.UVTools
             var e = Event.current;
             if (e.type == EventType.KeyDown && e.keyCode == _settings.ModeToggleHotkey && !EditorGUIUtility.editingTextField)
             {
-                ToggleAddRemoveMode(sv);
-                e.Use();
+                if (_targetMesh != null)
+                {
+                    ToggleAddRemoveMode(sv);
+                    e.Use();
+                }
             }
 
             if (_analysis != null && _targetTransform != null)

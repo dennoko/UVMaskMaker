@@ -1,5 +1,5 @@
 {
-    "window_title": "UVマスクメーカー",
+    "window_title": "MaskMaker",
     "target_model": "対象モデル",
     "drag_drop_hint": "MeshRenderer/SkinnedMeshRenderer を含む GameObject をここへドラッグ",
     "object_field_tooltip": "対象のGameObject（MeshRenderer または SkinnedMeshRenderer を含む）を指定します。",
