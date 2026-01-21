@@ -281,6 +281,14 @@ namespace Dennoko.UVTools
 
         private void SetTarget(GameObject go)
         {
+            // Auto cleanup logic: if current target is a Work Copy and we are switching to something else (or null), delete it.
+            if (_targetGO != null && _isWorkCopy && _targetGO != go)
+            {
+                Log($"[SetTarget] Auto-cleaning up work copy '{_targetGO.name}' because target changed/cleared.");
+                _workCopyService.CleanupWorkCopy(_targetGO);
+                _isWorkCopy = false;
+            }
+
             _targetGO = go;
             _targetRenderer = null;
             _targetMesh = null;
@@ -413,6 +421,7 @@ namespace Dennoko.UVTools
             // Switch back first? Or delete first?
             // If we delete active object, inspector might freak out.
             // Let's set target back to source first.
+            // SetTarget will handle the deletion of the current work copy automatically.
             _suppressAutoWorkCopy = true;
             try
             {
@@ -431,7 +440,6 @@ namespace Dennoko.UVTools
                 _suppressAutoWorkCopy = false;
             }
 
-            _workCopyService.CleanupWorkCopy(copyToDelete);
             Log("[WorkCopy] Cleaned up work copy");
         }
 

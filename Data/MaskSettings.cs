@@ -54,7 +54,7 @@ namespace Dennoko.UVTools.Data
         public bool UseBakedMesh = false;
 
         // Work Copy settings
-        public Vector3 WorkCopyOffset = new Vector3(1f, 0f, 0f);
+        public Vector3 WorkCopyOffset = new Vector3(1.5f, 0f, 0f);
         public bool AutoWorkCopy = true;
 
         // Vertex color bake settings

@@ -49,6 +49,8 @@ namespace Dennoko.UVTools.Services
             public const string UseEnglish = Prefix + "UseEnglish";
             public const string SaveInvertedToo = Prefix + "SaveInvertedToo";
             public const string UseTextureFolder = Prefix + "UseTextureFolder";
+            public const string WorkCopyOffset = Prefix + "WorkCopyOffset";
+            public const string AutoWorkCopy = Prefix + "AutoWorkCopy";
         }
 
         /// <summary>
@@ -91,6 +93,10 @@ namespace Dennoko.UVTools.Services
             settings.SeamColor = LoadColor(Keys.SeamColor, new Color(1f, 0.15f, 0.15f, 1f));
             settings.PreviewFillSelectedColor = LoadColor(Keys.PreviewFillSelectedColor, Color.black);
 
+            // Load Work Copy settings
+            settings.WorkCopyOffset = LoadVector3(Keys.WorkCopyOffset, new Vector3(1.5f, 0f, 0f));
+            settings.AutoWorkCopy = EditorPrefs.GetBool(Keys.AutoWorkCopy, true);
+
             return settings;
         }
 
@@ -131,6 +137,10 @@ namespace Dennoko.UVTools.Services
             SaveColor(Keys.SelectedSceneColor, settings.SelectedSceneColor);
             SaveColor(Keys.SeamColor, settings.SeamColor);
             SaveColor(Keys.PreviewFillSelectedColor, settings.PreviewFillSelectedColor);
+
+            // Save Work Copy settings
+            SaveVector3(Keys.WorkCopyOffset, settings.WorkCopyOffset);
+            EditorPrefs.SetBool(Keys.AutoWorkCopy, settings.AutoWorkCopy);
         }
 
         /// <summary>
@@ -180,6 +190,26 @@ namespace Dennoko.UVTools.Services
         private void SaveColor(string key, Color color)
         {
             EditorPrefs.SetString(key, ColorUtility.ToHtmlStringRGBA(color));
+        }
+
+        private Vector3 LoadVector3(string key, Vector3 defaultValue)
+        {
+            string s = EditorPrefs.GetString(key, "");
+            if (string.IsNullOrEmpty(s)) return defaultValue;
+            string[] parts = s.Split(',');
+            if (parts.Length == 3 &&
+                float.TryParse(parts[0], out float x) &&
+                float.TryParse(parts[1], out float y) &&
+                float.TryParse(parts[2], out float z))
+            {
+                return new Vector3(x, y, z);
+            }
+            return defaultValue;
+        }
+
+        private void SaveVector3(string key, Vector3 v)
+        {
+            EditorPrefs.SetString(key, $"{v.x},{v.y},{v.z}");
         }
     }
 }
