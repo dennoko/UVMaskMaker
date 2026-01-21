@@ -282,6 +282,26 @@ namespace Dennoko.UVTools
             }
         }
 
+        private bool TryFixReadWrite(Mesh mesh)
+        {
+            if (mesh.isReadable) return true;
+            string path = AssetDatabase.GetAssetPath(mesh);
+            // If path is empty, it might be a dynamic mesh where 'isReadable' check might be true or irrelevant.
+            // If it is false but no path, we can't fix it.
+            if (string.IsNullOrEmpty(path)) return false; 
+
+            var importer = AssetImporter.GetAtPath(path) as ModelImporter;
+            if (importer != null)
+            {
+                // Auto-fix without confirmation as per user request
+                importer.isReadable = true;
+                importer.SaveAndReimport();
+                Log($"[AutoFix] Enabled Read/Write for {path}");
+                return true;
+            }
+            return false;
+        }
+
         #region Core Logic
 
         private void SetTarget(GameObject go)
@@ -341,6 +361,15 @@ namespace Dennoko.UVTools
             if (_targetMesh == null)
             {
                 EditorUtility.DisplayDialog(_localization["dialog_no_mesh"], _localization["dialog_no_mesh_msg"], _localization["ok"]);
+                return;
+            }
+
+            if (!TryFixReadWrite(_targetMesh))
+            {
+                // Aborted or failed
+                _targetGO = null;
+                _targetRenderer = null;
+                _targetMesh = null;
                 return;
             }
 
