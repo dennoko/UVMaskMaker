@@ -53,6 +53,7 @@ namespace Dennoko.UVTools
         // UI state
         private Vector2 _scrollPos;
         private double _lastHotkeyToggleTime = 0;
+        private bool _suppressAutoWorkCopy = false;
 
         // Computed data
         private UVAnalysis _analysis;
@@ -165,6 +166,7 @@ namespace Dennoko.UVTools
             _advancedDrawer.OnBaseVCMeshChanged += m => { _baseVCMesh = m; _settingsManager.SetBaseVCMeshPath(m ? AssetDatabase.GetAssetPath(m) : ""); };
             _advancedDrawer.OnOverwriteExistingChanged += v => { _settings.OverwriteExistingVC = v; _settingsManager.Save(_settings); };
             _advancedDrawer.OnWorkCopyOffsetChanged += v => { _settings.WorkCopyOffset = v; _settingsManager.Save(_settings); };
+            _advancedDrawer.OnAutoWorkCopyChanged += v => { _settings.AutoWorkCopy = v; _settingsManager.Save(_settings); };
             _advancedDrawer.OnUseEnglishChanged += OnLanguageChanged;
         }
 
@@ -330,9 +332,23 @@ namespace Dennoko.UVTools
             }
 
             Log($"[SetTarget] Target set to '{_targetGO.name}', Mesh='{_targetMesh.name}', VertexCount={_targetMesh.vertexCount}");
+
+            // Auto Work Copy logic:
+            if (!_isWorkCopy && _settings.AutoWorkCopy && !_suppressAutoWorkCopy)
+            {
+                // Defer checking to SetupWorkCopy logic or just call it.
+                // If it succeeds, it sets target to copy, which calls SetTarget again (recursive).
+                // Once it returns, _targetGO in THIS call is still 'original'.
+                // So we should return to stop processing 'original' as target.
+                SetupWorkCopy();
+                return;
+            }
+
             BakeCurrentPoseAuto();
             AnalyzeTargetMesh();
-            _pickingService.Initialize(_targetTransform, _targetMesh, _bakedMesh, _settings.UseBakedMesh);
+            // Always use baked mesh for picking if it's a SkinnedMeshRenderer (to match scene view pose)
+            bool forceBakedPicking = (_targetRenderer is SkinnedMeshRenderer) && _bakedMesh != null;
+            _pickingService.Initialize(_targetTransform, _targetMesh, _bakedMesh, forceBakedPicking || _settings.UseBakedMesh);
         }
 
         private void OnBakedMeshOptionChanged(bool useBaked)
@@ -340,7 +356,8 @@ namespace Dennoko.UVTools
             _settings.UseBakedMesh = useBaked;
             _settingsManager.Save(_settings);
             _overlayRenderer.InvalidateCache();
-            _pickingService.UpdateMesh(_bakedMesh, useBaked);
+            bool forceBakedPicking = (_targetRenderer is SkinnedMeshRenderer) && _bakedMesh != null;
+            _pickingService.UpdateMesh(_bakedMesh, forceBakedPicking || useBaked);
             SceneView.RepaintAll();
         }
 
@@ -396,14 +413,22 @@ namespace Dennoko.UVTools
             // Switch back first? Or delete first?
             // If we delete active object, inspector might freak out.
             // Let's set target back to source first.
-            if (originalSource != null)
+            _suppressAutoWorkCopy = true;
+            try
             {
-                SetTarget(originalSource);
+                if (originalSource != null)
+                {
+                    SetTarget(originalSource);
+                }
+                else
+                {
+                    // Source lost? Just clear target.
+                    SetTarget(null);
+                }
             }
-            else
+            finally
             {
-                // Source lost? Just clear target.
-                SetTarget(null);
+                _suppressAutoWorkCopy = false;
             }
 
             _workCopyService.CleanupWorkCopy(copyToDelete);

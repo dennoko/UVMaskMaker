@@ -51,6 +51,7 @@ namespace Dennoko.UVTools.UI
         // Preferences events
         public event System.Action<bool> OnUseEnglishChanged;
         public event System.Action<Vector3> OnWorkCopyOffsetChanged;
+        public event System.Action<bool> OnAutoWorkCopyChanged;
 
         /// <summary>
         /// Draws scene overlay options (collapsible).

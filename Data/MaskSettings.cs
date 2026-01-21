@@ -55,6 +55,7 @@ namespace Dennoko.UVTools.Data
 
         // Work Copy settings
         public Vector3 WorkCopyOffset = new Vector3(1f, 0f, 0f);
+        public bool AutoWorkCopy = true;
 
         // Vertex color bake settings
         public bool OverwriteExistingVC = false;

@@ -13,6 +13,8 @@
     "mode_add_tooltip": "クリックしたUVアイランドを選択に追加します。",
     "mode_remove": "Remove",
     "mode_remove_tooltip": "クリックしたUVアイランドを選択から除外します。",
+    "auto_work_copy": "ワークコピー自動生成",
+    "auto_work_copy_tooltip": "ターゲットメッシュ設定時に自動的に作業用コピーを作成します。",
     "toggle_hotkey_label": "トグルホットキー",
     "toggle_hotkey_tooltip": "押すたびにAdd/Removeモードを切り替えます。",
     "scene_overlay": "シーンオーバーレイ",

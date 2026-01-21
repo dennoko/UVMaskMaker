@@ -13,6 +13,8 @@
     "mode_add_tooltip": "Add clicked UV island to selection.",
     "mode_remove": "Remove",
     "mode_remove_tooltip": "Remove clicked UV island from selection.",
+    "auto_work_copy": "Auto Work Copy",
+    "auto_work_copy_tooltip": "Automatically create a work copy when setting the target mesh.",
     "toggle_hotkey_label": "Toggle Hotkey",
     "toggle_hotkey_tooltip": "Press to toggle between Add/Remove mode.",
     "scene_overlay": "Scene Overlay",
