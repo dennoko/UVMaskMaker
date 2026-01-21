@@ -128,6 +128,14 @@ namespace Dennoko.UVTools
             var outPNG = outTex.EncodeToPNG(); UnityEngine.Object.DestroyImmediate(outTex);
             File.WriteAllBytes(path, outPNG);
             AssetDatabase.ImportAsset(path);
+
+            var importer = AssetImporter.GetAtPath(path) as TextureImporter;
+            if (importer != null)
+            {
+                importer.isReadable = true;
+                importer.streamingMipmaps = true;
+                importer.SaveAndReimport();
+            }
         }
     }
 }
