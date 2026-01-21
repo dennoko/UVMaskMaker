@@ -53,6 +53,11 @@ namespace Dennoko.UVTools.UI
         public event System.Action<Vector3> OnWorkCopyOffsetChanged;
         public event System.Action<bool> OnAutoWorkCopyChanged;
 
+        // Bake Maps events
+        public event System.Action<float> OnCurvatureStrengthChanged;
+        public event System.Action<int> OnCurvatureModeChanged;
+        public event System.Action OnBakeCurvatureClicked;
+
         /// <summary>
         /// Draws scene overlay options (collapsible).
         /// </summary>
@@ -316,6 +321,47 @@ namespace Dennoko.UVTools.UI
                 if (newOffset != settings.WorkCopyOffset)
                 {
                     OnWorkCopyOffsetChanged?.Invoke(newOffset);
+                }
+            }
+        }
+        /// <summary>
+        /// Draws Bake Maps section (collapsible).
+        /// </summary>
+        public void DrawBakeMapsSection(MaskSettings settings)
+        {
+            settings.BakeMapsFoldout = EditorUIStyles.DrawCollapsibleHeader(
+                "🗺️ " + _localization["bake_maps"],
+                settings.BakeMapsFoldout,
+                _localization["bake_maps_tooltip"]);
+
+            if (!settings.BakeMapsFoldout) return;
+
+            using (new EditorGUI.IndentLevelScope())
+            using (new EditorGUILayout.VerticalScope(EditorUIStyles.CardStyle))
+            {
+                EditorGUILayout.LabelField(_localization["bake_curvature"], EditorStyles.boldLabel);
+
+                float str = EditorGUILayout.Slider(
+                    _localization["curvature_strength"],
+                    settings.CurvatureStrength, 0.1f, 10f);
+                if (!Mathf.Approximately(str, settings.CurvatureStrength))
+                {
+                    OnCurvatureStrengthChanged?.Invoke(str);
+                }
+
+                int mode = EditorGUILayout.Popup(
+                    _localization["curvature_mode"],
+                    settings.CurvatureMode,
+                    new[] { _localization["mode_convex"], _localization["mode_concave"] });
+                if (mode != settings.CurvatureMode)
+                {
+                    OnCurvatureModeChanged?.Invoke(mode);
+                }
+
+                EditorGUILayout.Space(4);
+                if (GUILayout.Button(_localization["bake_curvature"], EditorUIStyles.SmallButtonStyle, GUILayout.Height(24)))
+                {
+                    OnBakeCurvatureClicked?.Invoke();
                 }
             }
         }

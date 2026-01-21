@@ -30,6 +30,7 @@ namespace Dennoko.UVTools
         private WorkCopyService _workCopyService;
         private UVPreviewDrawer _previewDrawer;
         private IMaskExporter _exporter;
+        private CurvatureBakeService _curvatureService;
 
         // UI Drawers
         private TargetSectionDrawer _targetDrawer;
@@ -106,6 +107,7 @@ namespace Dennoko.UVTools
             _workCopyService = new WorkCopyService();
             _previewDrawer = new UVPreviewDrawer();
             _exporter = new PngExporter();
+            _curvatureService = new CurvatureBakeService();
         }
 
         private void InitializeDrawers()
@@ -167,6 +169,13 @@ namespace Dennoko.UVTools
             _advancedDrawer.OnOverwriteExistingChanged += v => { _settings.OverwriteExistingVC = v; _settingsManager.Save(_settings); };
             _advancedDrawer.OnWorkCopyOffsetChanged += v => { _settings.WorkCopyOffset = v; _settingsManager.Save(_settings); };
             _advancedDrawer.OnAutoWorkCopyChanged += v => { _settings.AutoWorkCopy = v; _settingsManager.Save(_settings); };
+            _advancedDrawer.OnAutoWorkCopyChanged += v => { _settings.AutoWorkCopy = v; _settingsManager.Save(_settings); };
+            
+            // Curvature
+            _advancedDrawer.OnCurvatureStrengthChanged += v => { _settings.CurvatureStrength = v; _settingsManager.Save(_settings); };
+            _advancedDrawer.OnCurvatureModeChanged += v => { _settings.CurvatureMode = v; _settingsManager.Save(_settings); };
+            _advancedDrawer.OnBakeCurvatureClicked += BakeCurvatureMap;
+
             _advancedDrawer.OnUseEnglishChanged += OnLanguageChanged;
         }
 
@@ -193,6 +202,7 @@ namespace Dennoko.UVTools
             if (_settingsManager != null && _settings != null) _settingsManager.Save(_settings);
 
             _pickingService?.Dispose();
+            _curvatureService?.Dispose();
             if (_previewDrawer != null)
             {
                 _previewDrawer.OnIslandClicked -= OnPreviewIslandClicked;
@@ -240,6 +250,7 @@ namespace Dennoko.UVTools
             _advancedDrawer.DrawOverlaySection(_settings, GetBaseTexture());
             _advancedDrawer.DrawChannelWriteSection(_settings, _basePNG);
             _advancedDrawer.DrawVertexColorSection(_settings, _baseVCMesh, _analysis != null);
+            _advancedDrawer.DrawBakeMapsSection(_settings);
             _advancedDrawer.DrawPreferencesSection(_settings);
 
             EditorGUILayout.Space(8);
@@ -664,6 +675,47 @@ namespace Dennoko.UVTools
             {
                 Debug.LogError($"Bake vertex colors failed: {ex.Message}\n{ex}");
                 EditorUtility.DisplayDialog(_localization["dialog_error"], _localization["dialog_bake_channel_failed"], _localization["ok"]);
+            }
+        }
+
+        private void BakeCurvatureMap()
+        {
+            if (_targetMesh == null || _targetRenderer == null)
+            {
+                EditorUtility.DisplayDialog(_localization["dialog_no_target"], _localization["dialog_no_target_msg"], _localization["ok"]);
+                return;
+            }
+
+            string targetDir = _settings.OutputDir;
+            if (_settings.UseTextureFolder)
+            {
+                string texPath = GetBaseTexturePath();
+                if (!string.IsNullOrEmpty(texPath)) targetDir = Path.GetDirectoryName(texPath);
+            }
+            if (!AssetDatabase.IsValidFolder(targetDir)) UVMaskExport.EnsureAssetFolderPath(targetDir);
+
+            string fileName = "Curvature_" + (_targetGO != null ? _targetGO.name : "Map");
+            if (_isWorkCopy && fileName.Contains(" [WorkCopy]")) fileName = fileName.Replace(" [WorkCopy]", "");
+            
+            // Suffix?
+            string suffix = _settings.CurvatureMode == 0 ? "_Convex" : "_Concave";
+            string fullPath = Path.Combine(targetDir, fileName + suffix + ".png").Replace('\\', '/');
+            fullPath = AssetDatabase.GenerateUniqueAssetPath(fullPath);
+
+            // If using auto work copy, we need to make sure we use the ORIGINAL material info if possible,
+            // but the current renderer on work copy has the materials.
+            // The CurvatureBakeService uses targetRenderer.sharedMaterial.
+            // Work copy does not modify materials, so it should be fine.
+            // For the Mesh, use _targetMesh (which is Work Copy mesh if SetTarget(copy) is active).
+            
+            if (_curvatureService.BakeCurvatureMap(_targetRenderer, _targetMesh, _settings, fullPath))
+            {
+                Log($"[BakeCurvature] Saved to {fullPath}");
+                RevealSaved(fullPath);
+            }
+            else
+            {
+                EditorUtility.DisplayDialog(_localization["dialog_error"], "Failed to bake curvature map. See Console.", _localization["ok"]);
             }
         }
 

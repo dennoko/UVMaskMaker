@@ -51,6 +51,9 @@ namespace Dennoko.UVTools.Services
             public const string UseTextureFolder = Prefix + "UseTextureFolder";
             public const string WorkCopyOffset = Prefix + "WorkCopyOffset";
             public const string AutoWorkCopy = Prefix + "AutoWorkCopy";
+            public const string CurvatureStrength = Prefix + "CurvatureStrength";
+            public const string CurvatureMode = Prefix + "CurvatureMode";
+            public const string BakeMapsFoldout = Prefix + "BakeMapsFoldout";
         }
 
         /// <summary>
@@ -97,6 +100,11 @@ namespace Dennoko.UVTools.Services
             settings.WorkCopyOffset = LoadVector3(Keys.WorkCopyOffset, new Vector3(1.5f, 0f, 0f));
             settings.AutoWorkCopy = EditorPrefs.GetBool(Keys.AutoWorkCopy, true);
 
+            // Load Curvature settings
+            settings.CurvatureStrength = EditorPrefs.GetFloat(Keys.CurvatureStrength, 1.0f);
+            settings.CurvatureMode = EditorPrefs.GetInt(Keys.CurvatureMode, 0);
+            settings.BakeMapsFoldout = EditorPrefs.GetBool(Keys.BakeMapsFoldout, false);
+
             return settings;
         }
 
@@ -141,6 +149,11 @@ namespace Dennoko.UVTools.Services
             // Save Work Copy settings
             SaveVector3(Keys.WorkCopyOffset, settings.WorkCopyOffset);
             EditorPrefs.SetBool(Keys.AutoWorkCopy, settings.AutoWorkCopy);
+
+            // Save Curvature settings
+            EditorPrefs.SetFloat(Keys.CurvatureStrength, settings.CurvatureStrength);
+            EditorPrefs.SetInt(Keys.CurvatureMode, settings.CurvatureMode);
+            EditorPrefs.SetBool(Keys.BakeMapsFoldout, settings.BakeMapsFoldout);
         }
 
         /// <summary>

@@ -60,10 +60,15 @@ namespace Dennoko.UVTools.Data
         // Vertex color bake settings
         public bool OverwriteExistingVC = false;
 
+        // Curvature Map settings
+        public float CurvatureStrength = 1.0f;
+        public int CurvatureMode = 0; // 0=Convex(Edge), 1=Concave(Cavity)
+        
         // Foldout states (UI state, but persisted)
         public bool ColorOptionsFoldout = false;
         public bool AdvancedOptionsFoldout = false;
         public bool ChannelWriteFoldout = false;
+        public bool BakeMapsFoldout = false;
 
         // Language setting
         public string Language = "ja";
