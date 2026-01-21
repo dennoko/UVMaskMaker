@@ -221,6 +221,26 @@ namespace Dennoko.UVTools.UI
         }
 
         /// <summary>
+        /// Draws a secondary action button centered.
+        /// </summary>
+        public static bool DrawSecondaryButton(string text, string tooltip = null, float width = 180)
+        {
+            bool clicked = false;
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                GUILayout.FlexibleSpace();
+                var content = tooltip != null ? new GUIContent(text, tooltip) : new GUIContent(text);
+                // Use standard button style (not bold)
+                if (GUILayout.Button(content, GUILayout.Width(width), GUILayout.Height(24)))
+                {
+                    clicked = true;
+                }
+                GUILayout.FlexibleSpace();
+            }
+            return clicked;
+        }
+
+        /// <summary>
         /// Draws a toggle with improved styling.
         /// </summary>
         public static bool DrawToggle(bool value, string label, string tooltip = null)

@@ -53,6 +53,9 @@ namespace Dennoko.UVTools.Data
         // Skinned mesh settings
         public bool UseBakedMesh = false;
 
+        // Work Copy settings
+        public Vector3 WorkCopyOffset = new Vector3(1f, 0f, 0f);
+
         // Vertex color bake settings
         public bool OverwriteExistingVC = false;
 

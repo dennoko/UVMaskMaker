@@ -50,6 +50,7 @@ namespace Dennoko.UVTools.UI
 
         // Preferences events
         public event System.Action<bool> OnUseEnglishChanged;
+        public event System.Action<Vector3> OnWorkCopyOffsetChanged;
 
         /// <summary>
         /// Draws scene overlay options (collapsible).
@@ -305,6 +306,15 @@ namespace Dennoko.UVTools.UI
                 if (english != settings.UseEnglish)
                 {
                     OnUseEnglishChanged?.Invoke(english);
+                }
+
+                EditorGUILayout.Space(2);
+                Vector3 newOffset = EditorGUILayout.Vector3Field(
+                    new GUIContent(_localization.Get("work_copy_offset", "Work Copy Offset"), _localization.Get("work_copy_offset_tooltip", "Position offset for the work copy object")),
+                    settings.WorkCopyOffset);
+                if (newOffset != settings.WorkCopyOffset)
+                {
+                    OnWorkCopyOffsetChanged?.Invoke(newOffset);
                 }
             }
         }

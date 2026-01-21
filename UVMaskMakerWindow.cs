@@ -27,6 +27,7 @@ namespace Dennoko.UVTools
         private LocalizationService _localization;
         private PickingService _pickingService;
         private OverlayRenderer _overlayRenderer;
+        private WorkCopyService _workCopyService;
         private UVPreviewDrawer _previewDrawer;
         private IMaskExporter _exporter;
 
@@ -44,6 +45,10 @@ namespace Dennoko.UVTools
         private Renderer _targetRenderer;
         private Mesh _targetMesh;
         private Transform _targetTransform;
+        
+        // Work Copy state
+        private bool _isWorkCopy;
+        private GameObject _sourceTargetGO;
 
         // UI state
         private Vector2 _scrollPos;
@@ -97,6 +102,7 @@ namespace Dennoko.UVTools
             _localization.LoadLanguage(_settings.Language);
             _pickingService = new PickingService();
             _overlayRenderer = new OverlayRenderer();
+            _workCopyService = new WorkCopyService();
             _previewDrawer = new UVPreviewDrawer();
             _exporter = new PngExporter();
         }
@@ -111,6 +117,9 @@ namespace Dennoko.UVTools
             // Wire up target drawer events
             _targetDrawer.OnTargetChanged += SetTarget;
             _targetDrawer.OnBakedMeshChanged += OnBakedMeshOptionChanged;
+            _targetDrawer.OnRefreshClicked += () => BakeCurrentPoseAuto(true);
+            _targetDrawer.OnSetupWorkCopyClicked += SetupWorkCopy;
+            _targetDrawer.OnCleanupWorkCopyClicked += CleanupWorkCopy;
 
             // Wire up selection drawer events
             _selectionDrawer.OnAnalyzeClicked += AnalyzeTargetMesh;
@@ -156,6 +165,7 @@ namespace Dennoko.UVTools
             _advancedDrawer.OnBakeVertexColorClicked += BakeMaskToVertexColors;
             _advancedDrawer.OnBaseVCMeshChanged += m => { _baseVCMesh = m; _settingsManager.SetBaseVCMeshPath(m ? AssetDatabase.GetAssetPath(m) : ""); };
             _advancedDrawer.OnOverwriteExistingChanged += v => { _settings.OverwriteExistingVC = v; _settingsManager.Save(_settings); };
+            _advancedDrawer.OnWorkCopyOffsetChanged += v => { _settings.WorkCopyOffset = v; _settingsManager.Save(_settings); };
             _advancedDrawer.OnUseEnglishChanged += OnLanguageChanged;
         }
 
@@ -209,7 +219,7 @@ namespace Dennoko.UVTools
             EditorGUILayout.Space(4);
 
             // Target section (always visible)
-            _targetDrawer.Draw(_targetGO, _targetRenderer, _settings);
+            _targetDrawer.Draw(_targetGO, _targetRenderer, _settings, _isWorkCopy);
 
             // Preview section
             DrawPreview();
@@ -305,6 +315,15 @@ namespace Dennoko.UVTools
                 _targetTransform = mr.transform;
             }
 
+            // Work Copy check
+            _isWorkCopy = _workCopyService.IsWorkCopy(_targetGO);
+            if (!_isWorkCopy && _sourceTargetGO != null && _sourceTargetGO != _targetGO)
+            {
+                // Lost track of source or switched manually. Clear source reference.
+                // Or maybe we selected the source again?
+                if (_targetGO != _sourceTargetGO) _sourceTargetGO = null;
+            }
+
             if (_targetMesh == null)
             {
                 EditorUtility.DisplayDialog(_localization["dialog_no_mesh"], _localization["dialog_no_mesh_msg"], _localization["ok"]);
@@ -349,6 +368,47 @@ namespace Dennoko.UVTools
                 Debug.LogError($"UV analysis failed: {ex.Message}\n{ex}");
                 Log($"[Analyze][Error] {ex}");
             }
+        }
+
+        private void SetupWorkCopy()
+        {
+            if (_targetRenderer == null) return;
+            if (_isWorkCopy) return;
+
+            // Remember source
+            _sourceTargetGO = _targetGO;
+
+            // Create copy
+            var copy = _workCopyService.CreateWorkCopy(_targetRenderer, _settings.WorkCopyOffset);
+            if (copy != null)
+            {
+                SetTarget(copy);
+                Log($"[WorkCopy] Created work copy '{copy.name}'");
+            }
+        }
+
+        private void CleanupWorkCopy()
+        {
+            if (!_isWorkCopy || _targetGO == null) return;
+
+            var copyToDelete = _targetGO;
+            var originalSource = _sourceTargetGO;
+
+            // Switch back first? Or delete first?
+            // If we delete active object, inspector might freak out.
+            // Let's set target back to source first.
+            if (originalSource != null)
+            {
+                SetTarget(originalSource);
+            }
+            else
+            {
+                // Source lost? Just clear target.
+                SetTarget(null);
+            }
+
+            _workCopyService.CleanupWorkCopy(copyToDelete);
+            Log("[WorkCopy] Cleaned up work copy");
         }
 
         private void InvertSelection()
@@ -541,11 +601,12 @@ namespace Dennoko.UVTools
             }
         }
 
-        private void BakeCurrentPoseAuto()
+        private void BakeCurrentPoseAuto(bool force = false)
         {
             if (!(_targetRenderer is SkinnedMeshRenderer smr)) return;
             if (_bakedMesh == null) _bakedMesh = new Mesh { name = $"{_targetMesh?.name}_Baked" };
             else _bakedMesh.Clear();
+            
             try { smr.BakeMesh(_bakedMesh); _overlayRenderer.InvalidateCache(); _pickingService.UpdateMesh(_bakedMesh, _settings.UseBakedMesh); }
             catch { }
         }
