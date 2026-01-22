@@ -124,41 +124,35 @@ namespace Dennoko.UVTools.Services
 
         private string FindResourcePath()
         {
-            // Find the script location using asset database
+            // 1. Primary fixed path check as requested
+            // Expected: Assets/Editor/MaskMaker/res/lang
+            string fixedPath = Path.Combine(Application.dataPath, "Editor", "MaskMaker", "res", "lang");
+            if (Directory.Exists(fixedPath))
+            {
+                return fixedPath;
+            }
+
+            // 2. Relative fallback (in case folder was renamed but structure is intact)
             string[] guids = AssetDatabase.FindAssets("LocalizationService t:Script");
             foreach (var guid in guids)
             {
-                string path = AssetDatabase.GUIDToAssetPath(guid);
-                
-                // Ensure we found the correct script by checking the ending
-                if (path.EndsWith("Services/LocalizationService.cs") || path.EndsWith("LocalizationService.cs"))
+                string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+                if (!string.IsNullOrEmpty(assetPath) && assetPath.EndsWith("Services/LocalizationService.cs"))
                 {
-                    string dir = Path.GetDirectoryName(path);
-                    // Assume structure: Root/Services/LocalizationService.cs -> Root/res/lang
-                    // So we need to go up one level from 'Services' folder
-                    string resPath = Path.Combine(dir, "..", "res", "lang").Replace("\\", "/");
+                    // e.g. Assets/Something/Services/LocalizationService.cs -> Assets/Something/res/lang
+                    string serviceDir = Path.GetDirectoryName(assetPath);
+                    string rootDir = Path.GetDirectoryName(serviceDir);
+                    string langPathRelative = Path.Combine(rootDir, "res", "lang"); 
                     
-                    // Verify if the directory actually exists at this location
-                    // Note: AssetDatabase uses relative paths (Assets/...), but Directory.Exists works best with full paths or project-relative.
-                    // Let's rely on AssetDatabase behavior which generally works with relative paths in Unity context OR convert to absolute.
-                    
-                    // Ideally check via AssetDatabase first to be safe
-                    if (AssetDatabase.IsValidFolder(resPath))
+                    if (AssetDatabase.IsValidFolder(langPathRelative))
                     {
-                        // Directory.GetFiles requires system path usually, so let's convert to full path for IO operations
-                        return Path.GetFullPath(resPath);
+                        // Convert Asset path to full system path
+                        return Path.GetFullPath(langPathRelative);
                     }
-                    
-                    // Fallback: maybe the folder structure is flat? Check sibling 'res' folder
-                     string flatResPath = Path.Combine(dir, "res", "lang").Replace("\\", "/");
-                     if (AssetDatabase.IsValidFolder(flatResPath))
-                     {
-                         return Path.GetFullPath(flatResPath);
-                     }
                 }
             }
 
-            Debug.LogError("[LocalizationService] Could not find res/lang folder. Please ensure the 'res' folder is in the same directory as the 'Services' folder (or parent).");
+            Debug.LogError($"[MaskMaker] Language resources not found. Expected at: {fixedPath}");
             return string.Empty;
         }
 
