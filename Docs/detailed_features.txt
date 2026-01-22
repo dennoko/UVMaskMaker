@@ -1,0 +1,99 @@
+詳細機能とオプション
+
+対象モデル (Target Model)
+- Object: 対象となる GameObject (MeshRenderer / SkinnedMeshRenderer) を指定
+- Work Copy: アバターのポーズ変形等の影響を受けない、作業用の静的コピーを作成/削除します
+
+編集モード (Edit Mode)
+- Add / Remove: クリック時の選択/解除動作の切り替え
+- ホットキー: モード切替に使用するキー（デフォルト: R / 環境設定で変更可能）
+
+選択操作 (Selection Actions)
+- Analyze UVs: 現在のメッシュと設定でUV解析を実行（初回や設定変更時に実行）
+- Invert: 現在の選択状態を反転
+- Select All: すべてのアイランドを選択
+- Clear: 選択をすべて解除
+
+UVプレビュー (UV Preview)
+- UV表示: 展開図を表示し、クリックでの選択も可能
+- ベーステクスチャ表示: 元のテクスチャを背景に表示し、位置関係を確認可能（詳細オプションで切り替え）
+
+クイックエクスポート (Quick Export)
+- Resolution: 出力画像の解像度（256 ～ 4096）
+- Invert Mask: 白（選択）と黒（非選択）を反転して出力
+- Pixel Margin: 黒領域（選択範囲）を外側に数ピクセル拡張し、UV境界の色の継ぎ目を防ぎます
+- Save PNG: 設定に基づいてマスク画像を保存
+
+出力設定 (Output Settings)
+- File Name: 出力ファイル名（.png は自動付与）
+- Output Folder: 保存先フォルダを指定
+- Main Texture Folder: チェックすると、対象モデルのテクスチャと同じフォルダに保存
+- Save Inverted Too: 通常のマスクと同時に、反転したマスク（_inv.png）も書き出し
+
+詳細オプション (Advanced Options)
+- Scene Overlay (シーン表示)
+  - Draw on Top: 常に最前面にワイヤーフレームを描画
+  - Line Settings: 線の太さやデプスオフセット（埋まり防止）の調整
+  - Color Settings: 選択色、シーム色、プレビューの塗りつぶし色や透明度をカスタマイズ
+- Channel Write (チャンネル書き込み)
+  - RGBA Select: 書き込み対象とするチャンネルを選択
+  - Base PNG: 既存の画像を指定することで、その画像の特定チャンネルだけを上書き更新可能
+- Vertex Color Bake (頂点カラー焼き込み)
+  - Bake to Mesh: 選択範囲を頂点カラーとしてメッシュに焼き込み、新規アセットとして保存
+  - Base Mesh: 既存の頂点カラー情報を持つメッシュを指定して合成可能
+  - Overwrite: 同名のメッシュアセットが存在する場合に上書きするかどうか
+- Preferences (環境設定)
+  - Use Baked Mesh: ポーズ変形済みのメッシュ形状を使用して判定（SkinnedMeshRenderer使用時）
+  - Auto Work Copy: ターゲット設定時に自動でWork Copyを作成するかどうか
+  - Hotkey / Language: ショートカットキーと言語（日/英）の設定
+
+---------------------------------------------------------------
+
+Detailed Features and Options
+
+Target Model
+- Object: Specify the target GameObject (MeshRenderer / SkinnedMeshRenderer)
+- Work Copy: Create/Remove a static working copy unaffected by pose deformations
+
+Edit Mode
+- Add / Remove: Toggle between selecting and deselecting on click
+- Hotkey: Key used to switch modes (Default: R / Customizable in Preferences)
+
+Selection Actions
+- Analyze UVs: Analyze UVs with current settings (Run initially or after changing settings)
+- Invert: Invert current selection
+- Select All: Select all islands
+- Clear: Deselect all
+
+UV Preview
+- UV Display: Shows the UV layout; clickable for selection
+- Base Texture Overlay: Display original texture in background for reference (Toggle in Advanced Options)
+
+Quick Export
+- Resolution: Output image resolution (256 - 4096)
+- Invert Mask: Inverts white (selected) and black (unselected) in the output
+- Pixel Margin: Expands the black area (selection) by a few pixels to prevent bleeding at UV seams
+- Save PNG: Save the mask image based on settings
+
+Output Settings
+- File Name: Output file name (.png is automatically added)
+- Output Folder: Specify destination folder
+- Main Texture Folder: Save in the same folder as the model's texture
+- Save Inverted Too: Export an inverted version (_inv.png) simultaneously
+
+Advanced Options
+- Scene Overlay
+  - Draw on Top: Always draw wireframes on top of other objects
+  - Line Settings: Adjust line thickness and depth offset (to prevent z-fighting)
+  - Color Settings: Customize selection color, seam color, preview fill color, and opacity
+- Channel Write
+  - RGBA Select: Choose which channels to write to
+  - Base PNG: Specify an existing image to overwrite only selected channels
+- Vertex Color Bake
+  - Bake to Mesh: Bake selection as vertex colors into the mesh and save as a new asset
+  - Base Mesh: Specify a mesh with existing vertex colors to composite with
+  - Overwrite: Toggle overwriting if a mesh asset with the same name exists
+- Preferences
+  - Use Baked Mesh: Use deformed mesh shape for detection (for SkinnedMeshRenderer)
+  - Auto Work Copy: Automatically create a Work Copy when setting a target
+  - Hotkey / Language: Settings for shortcut key and language (JP/EN)

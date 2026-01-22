@@ -1,0 +1,57 @@
+動作条件
+- Unity 2022.3.22f1
+- UV0 が必要（本ツールは UV0 を使用）
+
+動作はWindows11で確認
+
+
+基本手順
+1. メニューから `Tools > MaskMaker` を開く
+2. ウィンドウ上部の枠に対象 GameObject をドラッグ＆ドロップ（または Object フィールドで指定）
+   - 自動的に作業用コピー（[WorkCopy]）が生成され、メッシュ変形の影響を受けずに安全に選択できます
+   - ターゲット設定時に自動でUV解析が実行されます
+3. `Edit Mode` で `Add`（選択）か `Remove`（解除）を選択
+   - ホットキー `R`（デフォルト）でモードを素早く切り替えられます
+4. シーンビューまたは `UV Preview` 上でクリックしてUVアイランドを選択
+5. `Pixel Margin` を必要に応じて調整（UVの境界を数ピクセル塗り広げて隙間を防ぐ）
+6. `File Name` 等の設定を確認し、`Save PNG` でマスクを書き出し
+7. （任意）詳細オプションを使用する場合:
+   - チャンネル別出力: RGBAの特定チャンネルのみに書き込み、既存テクスチャへの合成も可能
+   - 頂点カラー焼き込み: 選択範囲を頂点カラーとしてメッシュに保存
+
+【注意】
+拡張機能のパーツ選択は対象となるモデルのUVに依存します。UVが繋がっているものや、適切にUV展開されていないモデルでは上手く動作しない恐れがあります。
+
+メッシュ変形を行っている場合でも、Work Copy機能（デフォルト有効）により正確な位置で選択作業が可能です。
+Work Copy機能を使用しない場合は、変形により実際のメッシュと表示位置がずれる場合がありますのでご注意ください。
+
+
+---------------------------------------------------------------
+
+Requirements
+
+- Unity 2022.3.22f1
+- UV0 is required (this tool uses UV0)
+
+Tested on Windows 11
+
+Basic Steps
+1. Open `Tools > MaskMaker` from the menu
+2. Drag & drop the target GameObject into the field at the top of the window (or specify it via the Object field)
+   - A working copy ([WorkCopy]) is automatically created, allowing safe selection unaffected by mesh deformation
+   - UV analysis runs automatically when the target is set
+3. Choose `Add` (Select) or `Remove` (Deselect) in `Edit Mode`
+   - You can quickly switch modes using the hotkey `R` (default)
+4. Click on the mesh in the Scene view or `UV Preview` to select UV islands
+5. Adjust `Pixel Margin` if needed (expands the fill boundary to prevent gaps)
+6. Check `File Name` and output settings, then click `Save PNG` to export the mask
+7. (Optional) Advanced Options:
+   - Channel Write: Write to specific RGBA channels, allowing composition into existing textures
+   - Vertex Color Bake: Save the selected area as vertex colors on a new mesh asset
+
+Notes
+
+Part selection depends on the UVs of the target model. Models with connected UVs or improper UV unwrapping may not work correctly.
+
+Even with mesh deformation, the Work Copy feature (enabled by default) allows for accurate selection.
+If you choose not to use the Work Copy feature, the mask selection may become misaligned with the displayed position due to deformations.
