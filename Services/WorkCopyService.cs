@@ -39,7 +39,7 @@ namespace Dennoko.UVTools.Services
 
             if (meshToCopy == null)
             {
-                Debug.LogError("[UVMaskMaker] Source renderer has no mesh.");
+                Debug.LogError("[MaskMaker] Source renderer has no mesh.");
                 return null;
             }
 

@@ -12,7 +12,7 @@ namespace Dennoko.UVTools.Services
     public class SettingsManager
     {
         // EditorPrefs key prefix
-        private const string Prefix = "Dennoko.UVTools.UVMaskMaker.";
+        private const string Prefix = "Dennoko.UVTools.MaskMaker.";
 
         // Preference keys
         private static class Keys

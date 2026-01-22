@@ -129,23 +129,36 @@ namespace Dennoko.UVTools.Services
             foreach (var guid in guids)
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
-                if (path.Contains("UVMaskMaker"))
+                
+                // Ensure we found the correct script by checking the ending
+                if (path.EndsWith("Services/LocalizationService.cs") || path.EndsWith("LocalizationService.cs"))
                 {
                     string dir = Path.GetDirectoryName(path);
+                    // Assume structure: Root/Services/LocalizationService.cs -> Root/res/lang
+                    // So we need to go up one level from 'Services' folder
                     string resPath = Path.Combine(dir, "..", "res", "lang").Replace("\\", "/");
-                    string fullPath = Path.GetFullPath(resPath);
-                    if (Directory.Exists(fullPath))
+                    
+                    // Verify if the directory actually exists at this location
+                    // Note: AssetDatabase uses relative paths (Assets/...), but Directory.Exists works best with full paths or project-relative.
+                    // Let's rely on AssetDatabase behavior which generally works with relative paths in Unity context OR convert to absolute.
+                    
+                    // Ideally check via AssetDatabase first to be safe
+                    if (AssetDatabase.IsValidFolder(resPath))
                     {
-                        return fullPath;
+                        // Directory.GetFiles requires system path usually, so let's convert to full path for IO operations
+                        return Path.GetFullPath(resPath);
                     }
+                    
+                    // Fallback: maybe the folder structure is flat? Check sibling 'res' folder
+                     string flatResPath = Path.Combine(dir, "res", "lang").Replace("\\", "/");
+                     if (AssetDatabase.IsValidFolder(flatResPath))
+                     {
+                         return Path.GetFullPath(flatResPath);
+                     }
                 }
             }
 
-            // Fallback: try to find relative to Application.dataPath
-            string fallbackPath = Path.Combine(Application.dataPath, "Editor", "UVMaskMaker", "res", "lang");
-            if (Directory.Exists(fallbackPath)) return fallbackPath;
-
-            Debug.LogError("[LocalizationService] Could not find res/lang folder");
+            Debug.LogError("[LocalizationService] Could not find res/lang folder. Please ensure the 'res' folder is in the same directory as the 'Services' folder (or parent).");
             return string.Empty;
         }
 

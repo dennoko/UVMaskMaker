@@ -69,8 +69,8 @@ namespace Dennoko.UVTools
         private Mesh _baseVCMesh;
 
         // Log file paths
-        private static string LogDir => Path.Combine(Application.dataPath, "../Logs/UVMaskMaker");
-        private static string LogPath => Path.Combine(LogDir, "UVMaskMaker.log");
+        private static string LogDir => Path.Combine(Application.dataPath, "../Logs/MaskMaker");
+        private static string LogPath => Path.Combine(LogDir, "MaskMaker.log");
 
         [MenuItem("Tools/MaskMaker")]
         public static void ShowWindow()
@@ -755,7 +755,7 @@ namespace Dennoko.UVTools
         private static void Log(string msg)
         {
             try { Directory.CreateDirectory(LogDir); File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss} {msg}\n"); } catch { }
-            Debug.Log($"[UVMaskMaker] {msg}");
+            Debug.Log($"[MaskMaker] {msg}");
         }
 
         #endregion
