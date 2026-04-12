@@ -136,6 +136,7 @@ namespace Dennoko.UVTools.UI
                 // File name
                 using (new EditorGUILayout.HorizontalScope())
                 {
+                    GUILayout.Space(8);
                     EditorGUILayout.LabelField(
                         new GUIContent(_localization["file_name"], _localization["file_name_tooltip"]),
                         GUILayout.Width(80));
@@ -146,18 +147,23 @@ namespace Dennoko.UVTools.UI
                 EditorGUILayout.Space(EditorUIStyles.InnerSpacing);
 
                 // Drag-and-drop area for folder/file
-                var dropRect = GUILayoutUtility.GetRect(0, 24, GUILayout.ExpandWidth(true));
-                var dropStyle = new GUIStyle(EditorStyles.helpBox)
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    alignment = TextAnchor.MiddleCenter,
-                    fontSize = 10
-                };
-                GUI.Box(dropRect, _localization.Get("output_folder_drop_hint", "フォルダまたは画像をドロップ"), dropStyle);
-                HandleFolderDragAndDrop(dropRect);
+                    GUILayout.Space(8);
+                    var dropRect = GUILayoutUtility.GetRect(0, 24, GUILayout.ExpandWidth(true));
+                    var dropStyle = new GUIStyle(EditorStyles.helpBox)
+                    {
+                        alignment = TextAnchor.MiddleCenter,
+                        fontSize = 10
+                    };
+                    GUI.Box(dropRect, _localization.Get("output_folder_drop_hint", "フォルダまたは画像をドロップ"), dropStyle);
+                    HandleFolderDragAndDrop(dropRect);
+                }
 
                 // Output folder row
                 using (new EditorGUILayout.HorizontalScope())
                 {
+                    GUILayout.Space(8);
                     EditorGUILayout.LabelField(
                         new GUIContent(_localization["output_folder"], _localization["output_folder_tooltip"]),
                         GUILayout.Width(80));

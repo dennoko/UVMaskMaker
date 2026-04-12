@@ -1,4 +1,4 @@
-// UVPreviewDrawer.cs - Handles UV preview rendering and click selection in the editor window
+// UVPreviewDrawer.cs - Handles UV preview rendering, click selection, zoom and pan in the editor window
 using System;
 using System.Collections.Generic;
 using UnityEditor;
@@ -10,64 +10,111 @@ namespace Dennoko.UVTools.UI
 {
     /// <summary>
     /// Draws the UV mask preview texture and border overlays in the editor window.
-    /// Supports click-based island selection.
+    /// Supports click-based island selection, mouse wheel zoom, and middle-click pan.
+    /// Call Draw(Rect viewportRect, ...) — the viewport rect is provided by the caller.
     /// </summary>
     public class UVPreviewDrawer
     {
+        // --- Textures ---
         private Texture2D _previewTex;
         private Texture2D _overlayTex;
         private bool _dirty = true;
         private int _lastSize = 0;
 
-        // Label map for click detection
+        // --- Label map for click detection ---
         private int[] _labelMap;
         private int _labelMapSize = 0;
-        private Rect _lastImgRect;
 
-        private static readonly Color UVFrame = new Color(0.25f, 0.25f, 0.25f, 1);
+        // --- Viewport / zoom / pan state ---
+        private Rect _viewportRect;     // the full rect passed to Draw()
+        private Vector2 _viewCenter;    // center of the base square (screen space, local coords)
+        private float _baseSide;        // side length of the base 1:1 square at zoom=1
+        private Rect _lastImgRect;      // actual drawn texture rect (after zoom/pan)
 
-        /// <summary>
-        /// Event fired when an island is clicked in the preview.
-        /// Parameter is the island index, or -1 if clicked on empty area.
-        /// </summary>
+        private float _zoomLevel = 1f;
+        private Vector2 _panOffset = Vector2.zero;
+        private bool _isDragging = false;
+
+        // --- Style constants ---
+        private static readonly Color UVFrameColor = new Color(0.25f, 0.25f, 0.25f, 1f);
+        private static readonly Color BackgroundColor = new Color(0.12f, 0.12f, 0.12f, 1f);
+
+        // --- Events ---
+        /// <summary>Fired when an island is clicked in the preview. -1 = empty area.</summary>
         public event Action<int> OnIslandClicked;
 
-        /// <summary>
-        /// Marks the preview as needing regeneration.
-        /// </summary>
-        public void MarkDirty()
+        /// <summary>Fired when zoom or pan changes (caller should Repaint).</summary>
+        public event Action OnViewChanged;
+
+        // --- Public API ---
+
+        /// <summary>Current zoom level (1.0 = fit).</summary>
+        public float ZoomLevel => _zoomLevel;
+
+        /// <summary>Marks the preview texture as needing regeneration.</summary>
+        public void MarkDirty() => _dirty = true;
+
+        /// <summary>Resets zoom and pan to default (fit view).</summary>
+        public void ResetView()
         {
-            _dirty = true;
+            _zoomLevel = 1f;
+            _panOffset = Vector2.zero;
+            OnViewChanged?.Invoke();
         }
 
         /// <summary>
-        /// Draws the UV preview in the given area.
+        /// Draws the UV preview inside the given viewport rect.
+        /// Should be called from within a GUILayout.BeginArea / equivalent context.
         /// </summary>
-        /// <param name="analysis">UV analysis result</param>
-        /// <param name="selectedIslands">Set of selected island indices</param>
-        /// <param name="settings">Current mask settings</param>
-        /// <param name="baseTexture">Optional base texture to overlay</param>
-        /// <param name="localization">Localization service for text strings</param>
         public void Draw(
+            Rect viewportRect,
             UVAnalysis analysis,
             HashSet<int> selectedIslands,
             MaskSettings settings,
             Texture baseTexture,
             Services.LocalizationService localization)
         {
-            var rect = GUILayoutUtility.GetAspectRect(1f, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
-            EditorGUI.DrawRect(rect, UVFrame * 0.5f);
+            _viewportRect = viewportRect;
+
+            // Background fill
+            EditorGUI.DrawRect(viewportRect, BackgroundColor);
+
+            // Compute base square (centered, with padding, at zoom=1)
+            const float pad = 6f;
+            var inner = new Rect(
+                viewportRect.x + pad,
+                viewportRect.y + pad,
+                viewportRect.width  - pad * 2f,
+                viewportRect.height - pad * 2f);
+
+            _baseSide   = Mathf.Min(inner.width, inner.height);
+            _viewCenter = new Vector2(
+                inner.x + inner.width  * 0.5f,
+                inner.y + inner.height * 0.5f);
+
+            // Compute actual drawn rect (zoom + pan applied)
+            float zoomedSize = _baseSide * _zoomLevel;
+            _lastImgRect = new Rect(
+                _viewCenter.x - zoomedSize * 0.5f + _panOffset.x,
+                _viewCenter.y - zoomedSize * 0.5f + _panOffset.y,
+                zoomedSize, zoomedSize);
+
+            // Handle interaction events (zoom, pan, click) regardless of analysis state
+            HandleScrollZoom(viewportRect);
+            HandleMiddleDrag(viewportRect);
 
             if (analysis == null)
             {
-                var hintText = localization?.Get("preview_hint") ?? "Run analysis to preview UVs";
-                GUI.Label(rect, hintText, new GUIStyle(EditorStyles.centeredGreyMiniLabel) { alignment = TextAnchor.MiddleCenter });
+                string hint = localization?.Get("preview_hint") ?? "Run analysis to preview UVs";
+                var hintStyle = new GUIStyle(EditorStyles.centeredGreyMiniLabel) { alignment = TextAnchor.MiddleCenter };
+                GUI.Label(viewportRect, hint, hintStyle);
+                DrawFrame();
                 return;
             }
 
-            int size = settings.TextureSize;
-            EnsureTextures(size);
-            EnsureLabelMap(analysis, size);
+            // Ensure textures and label map
+            EnsureTextures(settings.TextureSize);
+            EnsureLabelMap(analysis, settings.TextureSize);
 
             if (_dirty)
             {
@@ -75,93 +122,131 @@ namespace Dennoko.UVTools.UI
                 _dirty = false;
             }
 
-            // Calculate image rect
-            const float pad = 6f;
-            var texRect = new Rect(rect.x + pad, rect.y + pad, rect.width - pad * 2, rect.height - pad * 2);
-            float side = Mathf.Min(texRect.width, texRect.height);
-            _lastImgRect = new Rect(
-                texRect.x + (texRect.width - side) * 0.5f,
-                texRect.y + (texRect.height - side) * 0.5f,
-                side, side
-            );
-
-            // Handle click events
-            HandleClickEvent(analysis);
+            // Click handling (left button, island selection)
+            HandleClickEvent(analysis, viewportRect);
 
             if (Event.current.type == EventType.Repaint)
             {
-                DrawPreviewContent(rect, analysis, settings, baseTexture);
+                DrawPreviewContent(analysis, settings, baseTexture);
             }
         }
 
-        /// <summary>
-        /// Disposes of texture resources.
-        /// </summary>
+        /// <summary>Disposes texture resources.</summary>
         public void Dispose()
         {
-            if (_previewTex != null)
-            {
-                UnityEngine.Object.DestroyImmediate(_previewTex);
-                _previewTex = null;
-            }
-            if (_overlayTex != null)
-            {
-                UnityEngine.Object.DestroyImmediate(_overlayTex);
-                _overlayTex = null;
-            }
+            DestroyTex(ref _previewTex);
+            DestroyTex(ref _overlayTex);
             _labelMap = null;
         }
 
-        private void HandleClickEvent(UVAnalysis analysis)
+        /// <summary>Invalidates the label map. Call when analysis or resolution changes.</summary>
+        public void InvalidateLabelMap()
+        {
+            _labelMap = null;
+            _labelMapSize = 0;
+        }
+
+        // ────────────────────────────────────────────────────────────────────────
+        // Event handlers
+        // ────────────────────────────────────────────────────────────────────────
+
+        private void HandleScrollZoom(Rect viewportRect)
+        {
+            var e = Event.current;
+            if (e.type != EventType.ScrollWheel) return;
+            if (!viewportRect.Contains(e.mousePosition)) return;
+
+            // e.delta.y > 0 → scroll down → zoom out
+            float zoomDelta = -e.delta.y * 0.08f;
+            float newZoom = Mathf.Clamp(_zoomLevel * Mathf.Exp(zoomDelta), 0.1f, 20f);
+
+            // Zoom centred on mouse position
+            Vector2 mouseOffset = e.mousePosition - _viewCenter;
+            _panOffset = mouseOffset + (_panOffset - mouseOffset) * (newZoom / _zoomLevel);
+            _zoomLevel = newZoom;
+
+            e.Use();
+            OnViewChanged?.Invoke();
+        }
+
+        private void HandleMiddleDrag(Rect viewportRect)
+        {
+            var e = Event.current;
+
+            if (e.type == EventType.MouseDown && e.button == 2 && viewportRect.Contains(e.mousePosition))
+            {
+                _isDragging = true;
+                e.Use();
+                return;
+            }
+
+            if (e.type == EventType.MouseUp && e.button == 2)
+            {
+                if (_isDragging) e.Use();
+                _isDragging = false;
+                return;
+            }
+
+            if (e.type == EventType.MouseDrag && e.button == 2 && _isDragging)
+            {
+                _panOffset += e.delta;
+                e.Use();
+                OnViewChanged?.Invoke();
+            }
+        }
+
+        private void HandleClickEvent(UVAnalysis analysis, Rect viewportRect)
         {
             var e = Event.current;
             if (e.type != EventType.MouseDown || e.button != 0) return;
-            if (!_lastImgRect.Contains(e.mousePosition)) return;
             if (_labelMap == null || _labelMapSize == 0) return;
 
-            // Convert mouse position to UV coordinates
+            // Must be inside the viewport
+            if (!viewportRect.Contains(e.mousePosition)) return;
+            // Must be inside the drawn texture rect
+            if (!_lastImgRect.Contains(e.mousePosition)) return;
+
+            // Convert to UV coordinates (accounting for zoom/pan via _lastImgRect)
             float u = (e.mousePosition.x - _lastImgRect.x) / _lastImgRect.width;
             float v = 1f - (e.mousePosition.y - _lastImgRect.y) / _lastImgRect.height;
 
-            // Clamp to [0,1]
             u = Mathf.Clamp01(u);
             v = Mathf.Clamp01(v);
 
-            // Convert to pixel coordinates
             int px = Mathf.Clamp(Mathf.FloorToInt(u * _labelMapSize), 0, _labelMapSize - 1);
             int py = Mathf.Clamp(Mathf.FloorToInt(v * _labelMapSize), 0, _labelMapSize - 1);
-
-            // Get island index from label map
             int islandIdx = _labelMap[py * _labelMapSize + px];
 
-            // Fire event
             OnIslandClicked?.Invoke(islandIdx);
-
             e.Use();
         }
+
+        // ────────────────────────────────────────────────────────────────────────
+        // Texture management
+        // ────────────────────────────────────────────────────────────────────────
 
         private void EnsureTextures(int size)
         {
             if (_previewTex == null || _previewTex.width != size)
             {
-                if (_previewTex != null) UnityEngine.Object.DestroyImmediate(_previewTex);
+                DestroyTex(ref _previewTex);
                 _previewTex = new Texture2D(size, size, TextureFormat.RGBA32, false, true)
                 {
                     filterMode = FilterMode.Point,
-                    wrapMode = TextureWrapMode.Clamp,
-                    name = "UVMaskPreview"
+                    wrapMode   = TextureWrapMode.Clamp,
+                    name       = "UVMaskPreview"
                 };
                 _dirty = true;
             }
 
             if (_overlayTex == null || _overlayTex.width != size)
             {
-                if (_overlayTex != null) UnityEngine.Object.DestroyImmediate(_overlayTex);
+                DestroyTex(ref _overlayTex);
                 _overlayTex = new Texture2D(size, size, TextureFormat.RGBA32, false, true)
                 {
                     filterMode = FilterMode.Point,
-                    wrapMode = TextureWrapMode.Clamp,
-                    name = "UVMaskOverlay"
+                    wrapMode   = TextureWrapMode.Clamp,
+                    name       = "UVMaskOverlay"
                 };
                 _dirty = true;
             }
@@ -171,21 +256,11 @@ namespace Dennoko.UVTools.UI
 
         private void EnsureLabelMap(UVAnalysis analysis, int size)
         {
-            // Rebuild label map if size changed or not initialized
             if (_labelMap == null || _labelMapSize != size)
             {
-                _labelMap = Dennoko.UVTools.UVMaskExport.BuildLabelMapTransient(analysis, size, size);
+                _labelMap = UVMaskExport.BuildLabelMapTransient(analysis, size, size);
                 _labelMapSize = size;
             }
-        }
-
-        /// <summary>
-        /// Invalidates the label map cache. Call when analysis changes.
-        /// </summary>
-        public void InvalidateLabelMap()
-        {
-            _labelMap = null;
-            _labelMapSize = 0;
         }
 
         private void RegenerateTextures(UVAnalysis analysis, HashSet<int> selectedIslands, MaskSettings settings)
@@ -193,60 +268,80 @@ namespace Dennoko.UVTools.UI
             int size = settings.TextureSize;
             var mask = MaskBuilder.BuildProcessedMask(analysis, selectedIslands, size, size, settings.PixelMargin, settings.InvertMask);
 
-            // Main preview texture
             var pixels = MaskBuilder.MaskToColors(mask, (Color32)settings.PreviewFillSelectedColor, new Color32(255, 255, 255, 255));
             _previewTex.SetPixels32(pixels);
             _previewTex.Apply(false, false);
 
-            // Overlay texture (semi-transparent)
             var overlay = MaskBuilder.MaskToOverlay(mask, settings.PreviewFillSelectedColor, settings.PreviewOverlayAlpha);
             _overlayTex.SetPixels32(overlay);
             _overlayTex.Apply(false, false);
         }
 
-        private void DrawPreviewContent(Rect rect, UVAnalysis analysis, MaskSettings settings, Texture baseTexture)
+        // ────────────────────────────────────────────────────────────────────────
+        // Drawing
+        // ────────────────────────────────────────────────────────────────────────
+
+        private void DrawPreviewContent(UVAnalysis analysis, MaskSettings settings, Texture baseTexture)
         {
+            // Clip drawing to viewport (avoid overdrawing toolbar etc.)
+            GUI.BeginGroup(_viewportRect);
+            var localLastImgRect = new Rect(
+                _lastImgRect.x - _viewportRect.x,
+                _lastImgRect.y - _viewportRect.y,
+                _lastImgRect.width,
+                _lastImgRect.height);
+            var localViewport = new Rect(0, 0, _viewportRect.width, _viewportRect.height);
+
             if (settings.PreviewOverlayBaseTex && baseTexture != null)
             {
-                // Draw base texture first
-                GUI.DrawTexture(_lastImgRect, baseTexture, ScaleMode.ScaleToFit, true);
-                // Then draw semi-transparent overlay
+                GUI.DrawTexture(localLastImgRect, baseTexture, ScaleMode.StretchToFill, true);
                 if (_overlayTex != null)
-                {
-                    GUI.DrawTexture(_lastImgRect, _overlayTex, ScaleMode.ScaleToFit, true);
-                }
+                    GUI.DrawTexture(localLastImgRect, _overlayTex, ScaleMode.StretchToFill, true);
             }
             else
             {
-                // Default: mask alone
-                GUI.DrawTexture(_lastImgRect, _previewTex, ScaleMode.ScaleToFit, true);
+                GUI.DrawTexture(localLastImgRect, _previewTex, ScaleMode.StretchToFill, false);
             }
 
-            // Draw UV island boundaries
+            // UV island boundary lines
             if (settings.ShowIslandPreview && analysis.BorderEdges != null && analysis.BorderEdges.Count > 0)
             {
-                GUI.BeginGroup(_lastImgRect);
-                var localRect = new Rect(0, 0, _lastImgRect.width, _lastImgRect.height);
                 Handles.BeginGUI();
                 Handles.color = new Color(1f, 0.5f, 0f, 1f);
                 foreach (var be in analysis.BorderEdges)
                 {
-                    float ax = Mathf.Lerp(localRect.x, localRect.xMax, Mathf.Clamp01(be.uv0.x));
-                    float ay = Mathf.Lerp(localRect.yMax, localRect.y, Mathf.Clamp01(be.uv0.y));
-                    float bx = Mathf.Lerp(localRect.x, localRect.xMax, Mathf.Clamp01(be.uv1.x));
-                    float by = Mathf.Lerp(localRect.yMax, localRect.y, Mathf.Clamp01(be.uv1.y));
-                    Handles.DrawLine(new Vector3(ax, ay, 0), new Vector3(bx, by, 0));
+                    float ax = Mathf.Lerp(localLastImgRect.x, localLastImgRect.xMax, Mathf.Clamp01(be.uv0.x));
+                    float ay = Mathf.Lerp(localLastImgRect.yMax, localLastImgRect.y,  Mathf.Clamp01(be.uv0.y));
+                    float bx = Mathf.Lerp(localLastImgRect.x, localLastImgRect.xMax, Mathf.Clamp01(be.uv1.x));
+                    float by = Mathf.Lerp(localLastImgRect.yMax, localLastImgRect.y,  Mathf.Clamp01(be.uv1.y));
+                    Handles.DrawLine(new Vector3(ax, ay), new Vector3(bx, by));
                 }
                 Handles.EndGUI();
-                GUI.EndGroup();
             }
 
-            // Draw frame
-            Handles.color = UVFrame;
-            Handles.DrawLine(new Vector3(_lastImgRect.x, _lastImgRect.y), new Vector3(_lastImgRect.xMax, _lastImgRect.y));
-            Handles.DrawLine(new Vector3(_lastImgRect.xMax, _lastImgRect.y), new Vector3(_lastImgRect.xMax, _lastImgRect.yMax));
-            Handles.DrawLine(new Vector3(_lastImgRect.xMax, _lastImgRect.yMax), new Vector3(_lastImgRect.x, _lastImgRect.yMax));
-            Handles.DrawLine(new Vector3(_lastImgRect.x, _lastImgRect.yMax), new Vector3(_lastImgRect.x, _lastImgRect.y));
+            GUI.EndGroup();
+
+            // Frame around base square (at zoom=1 boundary indicator)
+            DrawFrame();
+        }
+
+        private void DrawFrame()
+        {
+            // Draw 1px border around the _viewportRect
+            float x = _viewportRect.x, y = _viewportRect.y;
+            float xMax = _viewportRect.xMax, yMax = _viewportRect.yMax;
+            Handles.BeginGUI();
+            Handles.color = UVFrameColor;
+            Handles.DrawLine(new Vector3(x,    y),    new Vector3(xMax, y));
+            Handles.DrawLine(new Vector3(xMax, y),    new Vector3(xMax, yMax));
+            Handles.DrawLine(new Vector3(xMax, yMax), new Vector3(x,    yMax));
+            Handles.DrawLine(new Vector3(x,    yMax), new Vector3(x,    y));
+            Handles.EndGUI();
+        }
+
+        private static void DestroyTex(ref Texture2D tex)
+        {
+            if (tex != null) { UnityEngine.Object.DestroyImmediate(tex); tex = null; }
         }
     }
 }

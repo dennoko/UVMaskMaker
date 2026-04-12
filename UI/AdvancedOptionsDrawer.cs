@@ -18,6 +18,7 @@ namespace Dennoko.UVTools.UI
         private bool _overlayExpanded = false;
         private bool _channelWriteExpanded = false;
         private bool _vertexColorExpanded = false;
+        private bool _preferencesExpanded = false;
 
         public AdvancedOptionsDrawer(LocalizationService localization)
         {
@@ -96,58 +97,86 @@ namespace Dennoko.UVTools.UI
                 EditorGUILayout.Space(4);
 
                 // Thickness and depth
-                float th = EditorGUILayout.Slider(
-                    new GUIContent(_localization["thickness"], _localization["thickness_tooltip"]),
-                    settings.OverlaySeamThickness, 1f, 8f);
-                if (!Mathf.Approximately(th, settings.OverlaySeamThickness))
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    OnThicknessChanged?.Invoke(th);
+                    GUILayout.Space(8);
+                    float th = EditorGUILayout.Slider(
+                        new GUIContent(_localization["thickness"], _localization["thickness_tooltip"]),
+                        settings.OverlaySeamThickness, 1f, 8f);
+                    if (!Mathf.Approximately(th, settings.OverlaySeamThickness))
+                    {
+                        OnThicknessChanged?.Invoke(th);
+                    }
                 }
 
-                float depthMm = settings.OverlayDepthOffset * 1000f;
-                float newDepthMm = EditorGUILayout.Slider(
-                    new GUIContent(_localization["depth_offset"], _localization["depth_offset_tooltip"]),
-                    depthMm, 0f, 20f);
-                if (!Mathf.Approximately(newDepthMm, depthMm))
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    OnDepthOffsetChanged?.Invoke(newDepthMm / 1000f);
+                    GUILayout.Space(8);
+                    float depthMm = settings.OverlayDepthOffset * 1000f;
+                    float newDepthMm = EditorGUILayout.Slider(
+                        new GUIContent(_localization["depth_offset"], _localization["depth_offset_tooltip"]),
+                        depthMm, 0f, 20f);
+                    if (!Mathf.Approximately(newDepthMm, depthMm))
+                    {
+                        OnDepthOffsetChanged?.Invoke(newDepthMm / 1000f);
+                    }
                 }
 
                 EditorUIStyles.DrawSeparator();
 
                 // Colors
-                EditorGUILayout.LabelField(_localization["color_options"], EditorStyles.boldLabel);
-
-                var selCol = EditorGUILayout.ColorField(
-                    new GUIContent(_localization["selected_islands_color"], _localization["selected_islands_color_tooltip"]),
-                    settings.SelectedSceneColor);
-                if (selCol != settings.SelectedSceneColor)
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    OnSelectedColorChanged?.Invoke(selCol);
+                    GUILayout.Space(8);
+                    EditorGUILayout.LabelField(_localization["color_options"], EditorStyles.boldLabel);
                 }
 
-                var seamCol = EditorGUILayout.ColorField(
-                    new GUIContent(_localization["seam_color"], _localization["seam_color_tooltip"]),
-                    settings.SeamColor);
-                if (seamCol != settings.SeamColor)
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    OnSeamColorChanged?.Invoke(seamCol);
+                    GUILayout.Space(8);
+                    var selCol = EditorGUILayout.ColorField(
+                        new GUIContent(_localization["selected_islands_color"], _localization["selected_islands_color_tooltip"]),
+                        settings.SelectedSceneColor);
+                    if (selCol != settings.SelectedSceneColor)
+                    {
+                        OnSelectedColorChanged?.Invoke(selCol);
+                    }
                 }
 
-                var pfill = EditorGUILayout.ColorField(
-                    new GUIContent(_localization["preview_fill_color"], _localization["preview_fill_color_tooltip"]),
-                    settings.PreviewFillSelectedColor);
-                if (pfill != settings.PreviewFillSelectedColor)
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    OnPreviewFillColorChanged?.Invoke(pfill);
+                    GUILayout.Space(8);
+                    var seamCol = EditorGUILayout.ColorField(
+                        new GUIContent(_localization["seam_color"], _localization["seam_color_tooltip"]),
+                        settings.SeamColor);
+                    if (seamCol != settings.SeamColor)
+                    {
+                        OnSeamColorChanged?.Invoke(seamCol);
+                    }
                 }
 
-                float alpha = EditorGUILayout.Slider(
-                    new GUIContent(_localization["overlay_alpha"], _localization["overlay_alpha_tooltip"]),
-                    settings.PreviewOverlayAlpha, 0f, 1f);
-                if (!Mathf.Approximately(alpha, settings.PreviewOverlayAlpha))
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    OnOverlayAlphaChanged?.Invoke(alpha);
+                    GUILayout.Space(8);
+                    var pfill = EditorGUILayout.ColorField(
+                        new GUIContent(_localization["preview_fill_color"], _localization["preview_fill_color_tooltip"]),
+                        settings.PreviewFillSelectedColor);
+                    if (pfill != settings.PreviewFillSelectedColor)
+                    {
+                        OnPreviewFillColorChanged?.Invoke(pfill);
+                    }
+                }
+
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    GUILayout.Space(8);
+                    float alpha = EditorGUILayout.Slider(
+                        new GUIContent(_localization["overlay_alpha"], _localization["overlay_alpha_tooltip"]),
+                        settings.PreviewOverlayAlpha, 0f, 1f);
+                    if (!Mathf.Approximately(alpha, settings.PreviewOverlayAlpha))
+                    {
+                        OnOverlayAlphaChanged?.Invoke(alpha);
+                    }
                 }
 
                 EditorUIStyles.DrawSeparator();
@@ -196,18 +225,23 @@ namespace Dennoko.UVTools.UI
 
                 using (new EditorGUI.DisabledScope(!settings.ChannelWriteEnabled))
                 {
-                    EditorGUIUtility.labelWidth = 80;
-                    var newBase = EditorGUILayout.ObjectField(
-                        new GUIContent(_localization["base_png"], _localization["base_png_tooltip"]),
-                        basePNG, typeof(Texture2D), false, GUILayout.MaxWidth(250)) as Texture2D;
-                    EditorGUIUtility.labelWidth = 0;
-                    if (newBase != basePNG)
+                    using (new EditorGUILayout.HorizontalScope())
                     {
-                        OnBasePNGChanged?.Invoke(newBase);
+                        GUILayout.Space(8);
+                        EditorGUIUtility.labelWidth = 80;
+                        var newBase = EditorGUILayout.ObjectField(
+                            new GUIContent(_localization["base_png"], _localization["base_png_tooltip"]),
+                            basePNG, typeof(Texture2D), false, GUILayout.MaxWidth(250)) as Texture2D;
+                        EditorGUIUtility.labelWidth = 0;
+                        if (newBase != basePNG)
+                        {
+                            OnBasePNGChanged?.Invoke(newBase);
+                        }
                     }
 
                     using (new EditorGUILayout.HorizontalScope())
                     {
+                        GUILayout.Space(8);
                         EditorGUILayout.LabelField(_localization["write_channels"], GUILayout.Width(100));
                         bool r = GUILayout.Toggle(settings.WriteR, "R", GUILayout.Width(30));
                         bool g = GUILayout.Toggle(settings.WriteG, "G", GUILayout.Width(30));
@@ -239,12 +273,16 @@ namespace Dennoko.UVTools.UI
             using (new EditorGUI.IndentLevelScope())
             using (new EditorGUILayout.VerticalScope(EditorUIStyles.CardStyle))
             {
-                var newBaseMesh = EditorGUILayout.ObjectField(
-                    new GUIContent(_localization["base_vc_mesh"], _localization["base_vc_mesh_tooltip"]),
-                    baseVCMesh, typeof(Mesh), false) as Mesh;
-                if (newBaseMesh != baseVCMesh)
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    OnBaseVCMeshChanged?.Invoke(newBaseMesh);
+                    GUILayout.Space(8);
+                    var newBaseMesh = EditorGUILayout.ObjectField(
+                        new GUIContent(_localization["base_vc_mesh"], _localization["base_vc_mesh_tooltip"]),
+                        baseVCMesh, typeof(Mesh), false) as Mesh;
+                    if (newBaseMesh != baseVCMesh)
+                    {
+                        OnBaseVCMeshChanged?.Invoke(newBaseMesh);
+                    }
                 }
 
                 bool overwrite = EditorUIStyles.DrawToggle(settings.OverwriteExistingVC,
@@ -256,14 +294,18 @@ namespace Dennoko.UVTools.UI
 
                 EditorGUILayout.Space(4);
 
-                GUI.enabled = hasAnalysis;
-                if (GUILayout.Button(
-                    new GUIContent(_localization["bake_to_vertex_colors"], _localization["bake_to_vertex_colors_tooltip"]),
-                    EditorUIStyles.SmallButtonStyle, GUILayout.Height(24)))
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    OnBakeVertexColorClicked?.Invoke();
+                    GUILayout.Space(8);
+                    GUI.enabled = hasAnalysis;
+                    if (GUILayout.Button(
+                        new GUIContent(_localization["bake_to_vertex_colors"], _localization["bake_to_vertex_colors_tooltip"]),
+                        EditorUIStyles.SmallButtonStyle, GUILayout.Height(24)))
+                    {
+                        OnBakeVertexColorClicked?.Invoke();
+                    }
+                    GUI.enabled = true;
                 }
-                GUI.enabled = true;
             }
         }
 
@@ -272,10 +314,15 @@ namespace Dennoko.UVTools.UI
         /// </summary>
         public void DrawPreferencesSection(MaskSettings settings)
         {
-            EditorUIStyles.DrawSeparator();
-            EditorGUILayout.LabelField(_localization.Get("preferences", "環境設定"), EditorStyles.boldLabel);
+            _preferencesExpanded = EditorUIStyles.DrawCollapsibleHeader(
+                "⚙️ " + _localization.Get("preferences", "環境設定"),
+                _preferencesExpanded,
+                _localization.Get("preferences_tooltip", "言語、ホットキー、自動ワークコピーなどのエディタ設定"));
+
+            if (!_preferencesExpanded) return;
 
             using (new EditorGUI.IndentLevelScope())
+            using (new EditorGUILayout.VerticalScope(EditorUIStyles.CardStyle))
             {
                 // Language toggle
                 bool english = EditorUIStyles.DrawToggle(
@@ -289,9 +336,10 @@ namespace Dennoko.UVTools.UI
 
                 EditorGUILayout.Space(EditorUIStyles.InnerSpacing);
 
-                // Hotkey configuration (moved from SelectionSectionDrawer)
+                // Hotkey configuration
                 using (new EditorGUILayout.HorizontalScope())
                 {
+                    GUILayout.Space(8); // Toggle align
                     EditorGUILayout.LabelField(
                         new GUIContent(_localization["toggle_hotkey_label"], _localization["toggle_hotkey_tooltip"]),
                         GUILayout.Width(120));
@@ -320,12 +368,16 @@ namespace Dennoko.UVTools.UI
                 EditorGUILayout.Space(EditorUIStyles.InnerSpacing);
 
                 // Work Copy Offset
-                Vector3 newOffset = EditorGUILayout.Vector3Field(
-                    new GUIContent(_localization.Get("work_copy_offset", "Work Copy Offset"), _localization.Get("work_copy_offset_tooltip", "Position offset for the work copy object")),
-                    settings.WorkCopyOffset);
-                if (newOffset != settings.WorkCopyOffset)
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    OnWorkCopyOffsetChanged?.Invoke(newOffset);
+                    GUILayout.Space(8); // Toggle align
+                    Vector3 newOffset = EditorGUILayout.Vector3Field(
+                        new GUIContent(_localization.Get("work_copy_offset", "Work Copy Offset"), _localization.Get("work_copy_offset_tooltip", "Position offset for the work copy object")),
+                        settings.WorkCopyOffset);
+                    if (newOffset != settings.WorkCopyOffset)
+                    {
+                        OnWorkCopyOffsetChanged?.Invoke(newOffset);
+                    }
                 }
             }
         }

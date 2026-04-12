@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/dennoko/.claude/projects/c--Users-dennoko-AppData-Local-VRChatCreatorCompanion-VRChatProjects-Unity-extension-development-Assets-Editor-MaskMaker/**)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\dennoko\\.claude\\projects\\c--Users-dennoko-AppData-Local-VRChatCreatorCompanion-VRChatProjects-Unity-extension-development-Assets-Editor-MaskMaker\\memory"
+    ]
+  }
+}
