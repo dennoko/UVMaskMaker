@@ -32,6 +32,7 @@ namespace Dennoko.UVTools.Data
 
         // UV settings
         public int UVChannel = 0;
+        public int TargetSubmesh = 0;
 
         // Scene overlay settings
         public bool OverlayOnTop = false;

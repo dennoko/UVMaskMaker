@@ -44,7 +44,10 @@ namespace Dennoko.UVTools.Core
             bool useBakedMesh = false)
         {
             if (analysis == null || transform == null) return;
-            if (analysis.BorderEdges == null || analysis.BorderEdges.Count == 0) return;
+            // Use SeamEdges3D: deduplicated 3D vertex pairs — one entry per unique 3D edge
+            // regardless of how many UV sides it has. This avoids drawing the same 3D line
+            // multiple times when seam edges have two UV sides stored in BorderEdges.
+            if (analysis.SeamEdges3D == null || analysis.SeamEdges3D.Count == 0) return;
 
             EnsureWorldCache(analysis, transform, bakedMesh, useBakedMesh);
             if (_worldPosBase == null || _worldNormal == null) return;
@@ -57,11 +60,11 @@ namespace Dennoko.UVTools.Core
             if (settings.DisableAA)
             {
                 var seamVerts = ListPool<Vector3>.Get();
-                foreach (var be in analysis.BorderEdges)
+                foreach (var (v0, v1) in analysis.SeamEdges3D)
                 {
-                    if ((uint)be.v0 >= _worldPosBase.Length || (uint)be.v1 >= _worldPosBase.Length) continue;
-                    var a = _worldPosBase[be.v0] + _worldNormal[be.v0] * settings.OverlayDepthOffset;
-                    var b = _worldPosBase[be.v1] + _worldNormal[be.v1] * settings.OverlayDepthOffset;
+                    if ((uint)v0 >= _worldPosBase.Length || (uint)v1 >= _worldPosBase.Length) continue;
+                    var a = _worldPosBase[v0] + _worldNormal[v0] * settings.OverlayDepthOffset;
+                    var b = _worldPosBase[v1] + _worldNormal[v1] * settings.OverlayDepthOffset;
                     seamVerts.Add(a);
                     seamVerts.Add(b);
                 }
@@ -70,11 +73,11 @@ namespace Dennoko.UVTools.Core
             }
             else
             {
-                foreach (var be in analysis.BorderEdges)
+                foreach (var (v0, v1) in analysis.SeamEdges3D)
                 {
-                    if ((uint)be.v0 >= _worldPosBase.Length || (uint)be.v1 >= _worldPosBase.Length) continue;
-                    var a = _worldPosBase[be.v0] + _worldNormal[be.v0] * settings.OverlayDepthOffset;
-                    var b = _worldPosBase[be.v1] + _worldNormal[be.v1] * settings.OverlayDepthOffset;
+                    if ((uint)v0 >= _worldPosBase.Length || (uint)v1 >= _worldPosBase.Length) continue;
+                    var a = _worldPosBase[v0] + _worldNormal[v0] * settings.OverlayDepthOffset;
+                    var b = _worldPosBase[v1] + _worldNormal[v1] * settings.OverlayDepthOffset;
                     Handles.DrawAAPolyLine(settings.OverlaySeamThickness, a, b);
                 }
             }

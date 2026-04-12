@@ -30,6 +30,8 @@ namespace Dennoko.UVTools.UI
         public event System.Action<bool> OnBakedMeshChanged;
         public event System.Action OnSetupWorkCopyClicked;
         public event System.Action OnCleanupWorkCopyClicked;
+        public event System.Action<int> OnTargetSubmeshChanged;
+        public event System.Action<int> OnUVChannelChanged;
 
         /// <summary>
         /// Draws the target section.
@@ -104,6 +106,65 @@ namespace Dennoko.UVTools.UI
                         OnCleanupWorkCopyClicked?.Invoke();
                     }
                     GUI.backgroundColor = Color.white;
+                }
+            }
+
+            if (targetRenderer != null)
+            {
+                EditorGUILayout.Space(2);
+                EditorUIStyles.DrawSeparator();
+                EditorGUILayout.Space(2);
+
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUILayout.LabelField(
+                        new GUIContent(_localization.Get("target_submesh", "対象マテリアル"), _localization.Get("target_submesh_tooltip", "Target material/submesh to extract. All submeshes by default.")),
+                        GUILayout.Width(120));
+
+                    var materials = targetRenderer.sharedMaterials;
+                    string[] submeshNames;
+                    if (materials == null || materials.Length == 0)
+                    {
+                        submeshNames = new[] { _localization.Get("submesh_all", "All Submeshes") };
+                    }
+                    else
+                    {
+                        submeshNames = new string[materials.Length + 1];
+                        submeshNames[0] = _localization.Get("submesh_all", "All Submeshes");
+                        for (int i = 0; i < materials.Length; i++)
+                        {
+                            string matName = materials[i] != null ? materials[i].name : "None";
+                            submeshNames[i + 1] = $"[{i}] {matName}";
+                        }
+                    }
+
+                    int currentIndex = settings.TargetSubmesh + 1;
+                    if (currentIndex < 0 || currentIndex >= submeshNames.Length) currentIndex = 0;
+
+                    EditorGUI.BeginChangeCheck();
+                    int newIndex = EditorGUILayout.Popup(currentIndex, submeshNames);
+                    if (EditorGUI.EndChangeCheck() || newIndex != currentIndex)
+                    {
+                        if (OnTargetSubmeshChanged != null) OnTargetSubmeshChanged.Invoke(newIndex - 1);
+                    }
+                }
+
+                EditorGUILayout.Space(2);
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUILayout.LabelField(
+                        new GUIContent(_localization.Get("uv_channel", "UV Channel"), _localization.Get("uv_channel_tooltip", "UV channel for analysis/preview (UV0..UV7).")),
+                        GUILayout.Width(120));
+
+                    int newUv = EditorGUILayout.Popup(settings.UVChannel,
+                        new[] { "UV0", "UV1", "UV2", "UV3", "UV4", "UV5", "UV6", "UV7" },
+                        GUILayout.Width(80));
+
+                    if (newUv != settings.UVChannel)
+                    {
+                        OnUVChannelChanged?.Invoke(newUv);
+                    }
+                    GUILayout.FlexibleSpace();
                 }
             }
 

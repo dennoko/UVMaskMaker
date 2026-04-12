@@ -25,7 +25,6 @@ namespace Dennoko.UVTools.UI
         }
 
         // Scene overlay events
-        public event System.Action<int> OnUVChannelChanged;
         public event System.Action<bool> OnOverlayOnTopChanged;
         public event System.Action<bool> OnDisableAAChanged;
         public event System.Action<bool> OnBackfaceCullChanged;
@@ -69,27 +68,6 @@ namespace Dennoko.UVTools.UI
             using (new EditorGUI.IndentLevelScope())
             using (new EditorGUILayout.VerticalScope(EditorUIStyles.CardStyle))
             {
-                // UV Channel
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    EditorGUILayout.LabelField(
-                        new GUIContent(_localization["uv_channel"], _localization["uv_channel_tooltip"]),
-                        GUILayout.Width(80));
-
-                    int newUv = EditorGUILayout.Popup(settings.UVChannel,
-                        new[] { "UV0", "UV1", "UV2", "UV3", "UV4", "UV5", "UV6", "UV7" },
-                        GUILayout.Width(60));
-
-                    if (newUv != settings.UVChannel)
-                    {
-                        OnUVChannelChanged?.Invoke(newUv);
-                    }
-
-                    GUILayout.FlexibleSpace();
-                }
-
-                EditorGUILayout.Space(4);
-
                 // Display options
                 using (new EditorGUILayout.HorizontalScope())
                 {

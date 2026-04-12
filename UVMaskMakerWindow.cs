@@ -76,7 +76,7 @@ namespace Dennoko.UVTools
         public static void ShowWindow()
         {
             var wnd = GetWindow<UVMaskMakerWindow>();
-            wnd.titleContent = new GUIContent(LocalizationService.Instance["window_title"]);
+            wnd.titleContent = new GUIContent("Mask Maker");
             wnd.minSize = new Vector2(400, 600);
             wnd.Show();
         }
@@ -122,12 +122,13 @@ namespace Dennoko.UVTools
             _targetDrawer.OnBakedMeshChanged += OnBakedMeshOptionChanged;
             _targetDrawer.OnSetupWorkCopyClicked += SetupWorkCopy;
             _targetDrawer.OnCleanupWorkCopyClicked += CleanupWorkCopy;
+            _targetDrawer.OnTargetSubmeshChanged += idx => { _settings.TargetSubmesh = idx; _settingsManager.Save(_settings); AnalyzeTargetMesh(); };
+            _targetDrawer.OnUVChannelChanged += ch => { _settings.UVChannel = ch; _settingsManager.Save(_settings); AnalyzeTargetMesh(); };
 
             // Wire up selection drawer events (mode only)
             _selectionDrawer.OnModeChanged += mode => { _settings.AddMode = mode; _settingsManager.Save(_settings); };
 
             // Wire up selection actions drawer events
-            _selectionActionsDrawer.OnAnalyzeClicked += AnalyzeTargetMesh;
             _selectionActionsDrawer.OnInvertClicked += InvertSelection;
             _selectionActionsDrawer.OnSelectAllClicked += SelectAll;
             _selectionActionsDrawer.OnClearClicked += ClearSelection;
@@ -150,7 +151,6 @@ namespace Dennoko.UVTools
 
         private void WireAdvancedDrawerEvents()
         {
-            _advancedDrawer.OnUVChannelChanged += ch => { _settings.UVChannel = ch; _settingsManager.Save(_settings); AnalyzeTargetMesh(); };
             _advancedDrawer.OnOverlayOnTopChanged += v => { _settings.OverlayOnTop = v; _settingsManager.Save(_settings); SceneView.RepaintAll(); };
             _advancedDrawer.OnDisableAAChanged += v => { _settings.DisableAA = v; _settingsManager.Save(_settings); SceneView.RepaintAll(); };
             _advancedDrawer.OnBackfaceCullChanged += v => { _settings.BackfaceCull = v; _settingsManager.Save(_settings); SceneView.RepaintAll(); };
@@ -223,27 +223,38 @@ namespace Dennoko.UVTools
             _scrollPos = EditorGUILayout.BeginScrollView(_scrollPos);
             EditorGUILayout.Space(EditorUIStyles.CardSpacing);
 
-            // Target section (always visible)
+            // 1. Target section (Input Setup - always visible)
             _targetDrawer.Draw(_targetGO, _targetRenderer, _settings, _isWorkCopy);
 
             EditorGUILayout.Space(EditorUIStyles.CardSpacing);
 
-            // Edit Mode section (Add/Remove toggle)
+            // 2. Core Action: Analyze
+            EditorGUILayout.Space(4);
+            var oldColor = GUI.backgroundColor;
+            GUI.backgroundColor = new Color(0.2f, 0.6f, 1.0f); // Prominent blue tint
+            if (GUILayout.Button(
+                new GUIContent(_localization["analyze_uvs"], _localization["analyze_uvs_tooltip"]),
+                GUILayout.Height(36)))
+            {
+                AnalyzeTargetMesh();
+            }
+            GUI.backgroundColor = oldColor;
+            EditorGUILayout.Space(EditorUIStyles.CardSpacing);
+
+            // 3. Preview & Edit Tools
+            GUI.enabled = _analysis != null;
+            
             _selectionDrawer.Draw(_settings);
-
-            EditorGUILayout.Space(EditorUIStyles.CardSpacing);
-
-            // Preview section
+            
             DrawPreview();
-
-            EditorGUILayout.Space(EditorUIStyles.CardSpacing);
-
-            // Selection Actions section (Analyze, Invert, Select All, Clear)
+            
             _selectionActionsDrawer.Draw(_analysis != null);
+            
+            GUI.enabled = true;
 
             EditorGUILayout.Space(EditorUIStyles.CardSpacing);
 
-            // Export section (Quick Export + Output Settings)
+            // 4. Export section
             string fileName = _targetGO != null ? _targetGO.name : "uv_mask";
             if (_isWorkCopy && fileName.EndsWith(" [WorkCopy]")) fileName = fileName.Replace(" [WorkCopy]", "");
             _exportDrawer.FileName = fileName + "_mask";
@@ -427,20 +438,48 @@ namespace Dennoko.UVTools
             }
             try
             {
-                _analysis = UVAnalyzer.Analyze(_targetMesh, _settings.UVChannel);
-                _selectedIslands.Clear();
-                _previewDirty = true;
-                _overlayRenderer.InvalidateCache();
-                _previewDrawer.InvalidateLabelMap();
-                BakeCurrentPoseAuto();
-                Repaint();
-                Log($"[Analyze] Found {_analysis.Islands.Count} UV islands, {_analysis.BorderEdges.Count} UV border edges");
+                _analysis = UVAnalyzer.Analyze(_targetMesh, _settings.UVChannel, _settings.TargetSubmesh);
+                OnAnalysisSuccess();
             }
             catch (Exception ex)
             {
-                Debug.LogError($"UV analysis failed: {ex.Message}\n{ex}");
-                Log($"[Analyze][Error] {ex}");
+                if (_settings.UVChannel != 0)
+                {
+                    Log($"[Analyze][Warning] Failed with UV{_settings.UVChannel}, falling back to UV0. ({ex.Message})");
+                    _settings.UVChannel = 0;
+                    _settingsManager.Save(_settings);
+                    try
+                    {
+                        _analysis = UVAnalyzer.Analyze(_targetMesh, 0, _settings.TargetSubmesh);
+                        OnAnalysisSuccess();
+                    }
+                    catch (Exception ex2)
+                    {
+                        HandleAnalysisError(ex2);
+                    }
+                }
+                else
+                {
+                    HandleAnalysisError(ex);
+                }
             }
+        }
+
+        private void OnAnalysisSuccess()
+        {
+            _selectedIslands.Clear();
+            _previewDirty = true;
+            _overlayRenderer.InvalidateCache();
+            _previewDrawer.InvalidateLabelMap();
+            BakeCurrentPoseAuto();
+            Repaint();
+            Log($"[Analyze] Found {_analysis.Islands.Count} UV islands, {_analysis.BorderEdges.Count} UV border edges");
+        }
+
+        private void HandleAnalysisError(Exception ex)
+        {
+            Debug.LogError($"UV analysis failed: {ex.Message}\n{ex}");
+            Log($"[Analyze][Error] {ex}");
         }
 
         private void SetupWorkCopy()
@@ -538,14 +577,26 @@ namespace Dennoko.UVTools
         {
             if (_targetRenderer == null) return null;
             var mats = _targetRenderer.sharedMaterials;
-            if (mats == null) return null;
+            if (mats == null || mats.Length == 0) return null;
+
+            if (_settings.TargetSubmesh >= 0 && _settings.TargetSubmesh < mats.Length)
+            {
+                var m = mats[_settings.TargetSubmesh];
+                if (m != null)
+                {
+                    if (m.HasProperty("_BaseMap")) { var t = m.GetTexture("_BaseMap"); if (t != null) return t; }
+                    if (m.HasProperty("_MainTex")) { var t = m.GetTexture("_MainTex"); if (t != null) return t; }
+                }
+                return Texture2D.whiteTexture;
+            }
+
             foreach (var m in mats)
             {
                 if (m == null) continue;
                 if (m.HasProperty("_BaseMap")) { var t = m.GetTexture("_BaseMap"); if (t != null) return t; }
                 if (m.HasProperty("_MainTex")) { var t = m.GetTexture("_MainTex"); if (t != null) return t; }
             }
-            return null;
+            return Texture2D.whiteTexture;
         }
 
         private string GetBaseTexturePath()

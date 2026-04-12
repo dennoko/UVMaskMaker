@@ -23,6 +23,7 @@ namespace Dennoko.UVTools.Services
             public const string LastSaveDir = Prefix + "LastSaveDir";
             public const string ModeToggleHotkey = Prefix + "ModeToggleHotkey";
             public const string UVChannel = Prefix + "UVChannel";
+            public const string TargetSubmesh = Prefix + "TargetSubmesh";
             public const string OverlayOnTop = Prefix + "OverlayOnTop";
             public const string OverlayDepthOffset = Prefix + "OverlayDepthOffset";
             public const string OverlaySeamThickness = Prefix + "OverlaySeamThickness";
@@ -65,7 +66,10 @@ namespace Dennoko.UVTools.Services
             settings.InvertMask = EditorPrefs.GetBool(Keys.InvertMask, false);
             settings.OutputDir = EditorPrefs.GetString(Keys.LastSaveDir, "Assets/GeneratedMasks");
             settings.ModeToggleHotkey = (KeyCode)EditorPrefs.GetInt(Keys.ModeToggleHotkey, (int)KeyCode.R);
-            settings.UVChannel = EditorPrefs.GetInt(Keys.UVChannel, 0);
+            string uvStr = EditorUserSettings.GetConfigValue(Keys.UVChannel);
+            settings.UVChannel = int.TryParse(uvStr, out int uv) ? uv : 0;
+            string submeshStr = EditorUserSettings.GetConfigValue(Keys.TargetSubmesh);
+            settings.TargetSubmesh = int.TryParse(submeshStr, out int sm) ? sm : -1;
             settings.OverlayOnTop = EditorPrefs.GetBool(Keys.OverlayOnTop, false);
             settings.OverlayDepthOffset = EditorPrefs.GetFloat(Keys.OverlayDepthOffset, 0f);
             settings.OverlaySeamThickness = EditorPrefs.GetFloat(Keys.OverlaySeamThickness, 2.5f);
@@ -110,7 +114,8 @@ namespace Dennoko.UVTools.Services
             EditorPrefs.SetBool(Keys.InvertMask, settings.InvertMask);
             EditorPrefs.SetString(Keys.LastSaveDir, settings.OutputDir);
             EditorPrefs.SetInt(Keys.ModeToggleHotkey, (int)settings.ModeToggleHotkey);
-            EditorPrefs.SetInt(Keys.UVChannel, settings.UVChannel);
+            EditorUserSettings.SetConfigValue(Keys.UVChannel, settings.UVChannel.ToString());
+            EditorUserSettings.SetConfigValue(Keys.TargetSubmesh, settings.TargetSubmesh.ToString());
             EditorPrefs.SetBool(Keys.OverlayOnTop, settings.OverlayOnTop);
             EditorPrefs.SetFloat(Keys.OverlayDepthOffset, settings.OverlayDepthOffset);
             EditorPrefs.SetFloat(Keys.OverlaySeamThickness, settings.OverlaySeamThickness);

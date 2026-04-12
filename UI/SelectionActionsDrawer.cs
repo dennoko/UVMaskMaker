@@ -20,7 +20,6 @@ namespace Dennoko.UVTools.UI
         }
 
         // Events
-        public event System.Action OnAnalyzeClicked;
         public event System.Action OnInvertClicked;
         public event System.Action OnSelectAllClicked;
         public event System.Action OnClearClicked;
@@ -35,13 +34,6 @@ namespace Dennoko.UVTools.UI
             // Action buttons in a single row
             using (new EditorGUILayout.HorizontalScope())
             {
-                if (GUILayout.Button(
-                    new GUIContent(_localization["analyze_uvs"], _localization["analyze_uvs_tooltip"]),
-                    EditorUIStyles.SmallButtonStyle))
-                {
-                    OnAnalyzeClicked?.Invoke();
-                }
-
                 GUI.enabled = hasAnalysis;
                 
                 if (GUILayout.Button(
