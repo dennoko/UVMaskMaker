@@ -36,7 +36,8 @@ namespace Dennoko.UVTools.Services
                     size,
                     size,
                     settings.PixelMargin,
-                    settings.InvertMask);
+                    settings.InvertMask,
+                    settings.PaintMask);
 
                 Color32[] pixels;
 

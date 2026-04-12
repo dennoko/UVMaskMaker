@@ -135,5 +135,13 @@
     "cleanup_work_copy": "Cleanup Work Copy",
     "cleanup_work_copy_tooltip": "Delete work copy and revert to original target.",
     "work_copy_active_msg": "Work Copy Active. Original mesh is safe.",
-    "ok": "OK"
+    "ok": "OK",
+    "tool_select": "Select",
+    "tool_paint": "Paint",
+    "brush_size": "Size",
+    "tool_eraser": "Eraser",
+    "tool_undo": "Undo",
+    "tool_redo": "Redo",
+    "tool_clear": "Clear Paint",
+    "tool_clear_confirm": "Clear all hand-painted data?"
 }

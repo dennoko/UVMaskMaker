@@ -86,9 +86,18 @@ namespace Dennoko.UVTools.Core
             int width,
             int height,
             int pixelMargin,
-            bool invertMask)
+            bool invertMask,
+            byte[] paintMask = null)
         {
             var mask = BuildUnionMask(analysis, selectedIslands, width, height);
+
+            if (paintMask != null && paintMask.Length == mask.Length)
+            {
+                for (int i = 0; i < mask.Length; i++)
+                {
+                    if (paintMask[i] > 0) mask[i] = 255;
+                }
+            }
 
             if (invertMask)
             {

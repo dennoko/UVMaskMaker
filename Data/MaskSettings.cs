@@ -28,6 +28,9 @@ namespace Dennoko.UVTools.Data
 
         // Mode settings
         public bool AddMode = true;
+        public bool IsPaintMode = false;
+        public int BrushSize = 50;
+        public bool EraseMode = false;
         public KeyCode ModeToggleHotkey = KeyCode.R;
 
         // UV settings

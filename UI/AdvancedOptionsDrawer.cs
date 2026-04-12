@@ -60,7 +60,7 @@ namespace Dennoko.UVTools.UI
         public void DrawOverlaySection(MaskSettings settings, Texture baseTexture)
         {
             _overlayExpanded = EditorUIStyles.DrawCollapsibleHeader(
-                "🎨 " + _localization["scene_overlay"],
+                _localization["scene_overlay"],
                 _overlayExpanded,
                 _localization["advanced_options_tooltip"]);
 
@@ -207,7 +207,7 @@ namespace Dennoko.UVTools.UI
         public void DrawChannelWriteSection(MaskSettings settings, Texture2D basePNG)
         {
             _channelWriteExpanded = EditorUIStyles.DrawCollapsibleHeader(
-                "📝 " + _localization["channel_write"],
+                _localization["channel_write"],
                 _channelWriteExpanded,
                 _localization["channel_write_tooltip"]);
 
@@ -264,7 +264,7 @@ namespace Dennoko.UVTools.UI
         public void DrawVertexColorSection(MaskSettings settings, Mesh baseVCMesh, bool hasAnalysis)
         {
             _vertexColorExpanded = EditorUIStyles.DrawCollapsibleHeader(
-                "🎯 " + _localization["vertex_color_bake"],
+                _localization["vertex_color_bake"],
                 _vertexColorExpanded,
                 _localization["bake_to_vertex_colors_tooltip"]);
 
@@ -315,7 +315,7 @@ namespace Dennoko.UVTools.UI
         public void DrawPreferencesSection(MaskSettings settings)
         {
             _preferencesExpanded = EditorUIStyles.DrawCollapsibleHeader(
-                "⚙️ " + _localization.Get("preferences", "環境設定"),
+                _localization.Get("preferences", "環境設定"),
                 _preferencesExpanded,
                 _localization.Get("preferences_tooltip", "言語、ホットキー、自動ワークコピーなどのエディタ設定"));
 

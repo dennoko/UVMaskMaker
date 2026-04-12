@@ -1,4 +1,5 @@
 // UVPreviewDrawer.cs - Handles UV preview rendering, click selection, zoom and pan in the editor window
+// Performance: Uses cached island mask + tile-grid incremental updates for painting.
 using System;
 using System.Collections.Generic;
 using UnityEditor;
@@ -10,8 +11,8 @@ namespace Dennoko.UVTools.UI
 {
     /// <summary>
     /// Draws the UV mask preview texture and border overlays in the editor window.
-    /// Supports click-based island selection, mouse wheel zoom, and middle-click pan.
-    /// Call Draw(Rect viewportRect, ...) — the viewport rect is provided by the caller.
+    /// Supports click-based island selection, mouse wheel zoom, middle-click pan,
+    /// and hand-painting with incremental tile-based texture updates.
     /// </summary>
     public class UVPreviewDrawer
     {
@@ -21,15 +22,21 @@ namespace Dennoko.UVTools.UI
         private bool _dirty = true;
         private int _lastSize = 0;
 
+        // --- Cached data for incremental painting ---
+        private byte[] _cachedIslandMask;        // Cached BuildUnionMask result (no invert/dilate)
+        private Color32[] _cachedPixels;          // Reusable Color32 buffer for _previewTex
+        private Color32[] _cachedOverlayPixels;   // Reusable Color32 buffer for _overlayTex
+        private bool _paintDirty = false;         // Only paint changed (fast incremental path)
+
         // --- Label map for click detection ---
         private int[] _labelMap;
         private int _labelMapSize = 0;
 
         // --- Viewport / zoom / pan state ---
-        private Rect _viewportRect;     // the full rect passed to Draw()
-        private Vector2 _viewCenter;    // center of the base square (screen space, local coords)
-        private float _baseSide;        // side length of the base 1:1 square at zoom=1
-        private Rect _lastImgRect;      // actual drawn texture rect (after zoom/pan)
+        private Rect _viewportRect;
+        private Vector2 _viewCenter;
+        private float _baseSide;
+        private Rect _lastImgRect;
 
         private float _zoomLevel = 1f;
         private Vector2 _panOffset = Vector2.zero;
@@ -42,17 +49,30 @@ namespace Dennoko.UVTools.UI
         // --- Events ---
         /// <summary>Fired when an island is clicked in the preview. -1 = empty area.</summary>
         public event Action<int> OnIslandClicked;
+        public event Action OnPaintStrokeFinished;
 
         /// <summary>Fired when zoom or pan changes (caller should Repaint).</summary>
         public event Action OnViewChanged;
 
+        // --- Paint State ---
+        private Vector2 _lastPaintUV;
+        private bool _isPaintingValid = false;
+        private int _paintControlId;
+
         // --- Public API ---
+
+        /// <summary>True while a paint stroke is in progress (mouse held down in paint mode).</summary>
+        public bool IsPainting => _isPaintingValid;
 
         /// <summary>Current zoom level (1.0 = fit).</summary>
         public float ZoomLevel => _zoomLevel;
 
-        /// <summary>Marks the preview texture as needing regeneration.</summary>
-        public void MarkDirty() => _dirty = true;
+        /// <summary>Marks the preview texture as needing full regeneration.</summary>
+        public void MarkDirty()
+        {
+            _dirty = true;
+            _cachedIslandMask = null; // Invalidate island cache
+        }
 
         /// <summary>Resets zoom and pan to default (fit view).</summary>
         public void ResetView()
@@ -64,7 +84,6 @@ namespace Dennoko.UVTools.UI
 
         /// <summary>
         /// Draws the UV preview inside the given viewport rect.
-        /// Should be called from within a GUILayout.BeginArea / equivalent context.
         /// </summary>
         public void Draw(
             Rect viewportRect,
@@ -72,6 +91,7 @@ namespace Dennoko.UVTools.UI
             HashSet<int> selectedIslands,
             MaskSettings settings,
             Texture baseTexture,
+            MaskPainter painter,
             Services.LocalizationService localization)
         {
             _viewportRect = viewportRect;
@@ -116,17 +136,27 @@ namespace Dennoko.UVTools.UI
             EnsureTextures(settings.TextureSize);
             EnsureLabelMap(analysis, settings.TextureSize);
 
-            if (_dirty)
+            // Process input (may set _paintDirty or invoke island click)
+            HandleInteraction(analysis, settings, painter, viewportRect);
+
+            // Incremental paint update runs immediately on any event type (MouseDrag etc.)
+            // so the texture data is ready when the next Repaint draws it.
+            if (_paintDirty && !_dirty && painter != null)
             {
-                RegenerateTextures(analysis, selectedIslands, settings);
-                _dirty = false;
+                RegeneratePaintIncremental(settings, painter);
+                _paintDirty = false;
             }
 
-            // Click handling (left button, island selection)
-            HandleClickEvent(analysis, viewportRect);
-
+            // Full regeneration + drawing only on Repaint
             if (Event.current.type == EventType.Repaint)
             {
+                if (_dirty)
+                {
+                    RegenerateTexturesFull(analysis, selectedIslands, settings, painter);
+                    _dirty = false;
+                    _paintDirty = false;
+                }
+
                 DrawPreviewContent(analysis, settings, baseTexture);
             }
         }
@@ -134,9 +164,18 @@ namespace Dennoko.UVTools.UI
         /// <summary>Disposes texture resources.</summary>
         public void Dispose()
         {
+            // Release hotControl if still held
+            if (_isPaintingValid && GUIUtility.hotControl == _paintControlId)
+                GUIUtility.hotControl = 0;
+            _isPaintingValid = false;
+
             DestroyTex(ref _previewTex);
             DestroyTex(ref _overlayTex);
             _labelMap = null;
+            _cachedIslandMask = null;
+            _cachedPixels = null;
+            _cachedOverlayPixels = null;
+            _tileBuffer = null;
         }
 
         /// <summary>Invalidates the label map. Call when analysis or resolution changes.</summary>
@@ -156,11 +195,9 @@ namespace Dennoko.UVTools.UI
             if (e.type != EventType.ScrollWheel) return;
             if (!viewportRect.Contains(e.mousePosition)) return;
 
-            // e.delta.y > 0 → scroll down → zoom out
             float zoomDelta = -e.delta.y * 0.08f;
             float newZoom = Mathf.Clamp(_zoomLevel * Mathf.Exp(zoomDelta), 0.1f, 20f);
 
-            // Zoom centred on mouse position
             Vector2 mouseOffset = e.mousePosition - _viewCenter;
             _panOffset = mouseOffset + (_panOffset - mouseOffset) * (newZoom / _zoomLevel);
             _zoomLevel = newZoom;
@@ -195,30 +232,82 @@ namespace Dennoko.UVTools.UI
             }
         }
 
-        private void HandleClickEvent(UVAnalysis analysis, Rect viewportRect)
+        private void HandleInteraction(UVAnalysis analysis, MaskSettings settings, MaskPainter painter, Rect viewportRect)
         {
             var e = Event.current;
-            if (e.type != EventType.MouseDown || e.button != 0) return;
-            if (_labelMap == null || _labelMapSize == 0) return;
 
-            // Must be inside the viewport
-            if (!viewportRect.Contains(e.mousePosition)) return;
-            // Must be inside the drawn texture rect
-            if (!_lastImgRect.Contains(e.mousePosition)) return;
+            // Allocate a stable control ID for the paint interaction (must be called every OnGUI)
+            _paintControlId = GUIUtility.GetControlID(FocusType.Passive);
 
-            // Convert to UV coordinates (accounting for zoom/pan via _lastImgRect)
-            float u = (e.mousePosition.x - _lastImgRect.x) / _lastImgRect.width;
-            float v = 1f - (e.mousePosition.y - _lastImgRect.y) / _lastImgRect.height;
+            // For non-mouse events, nothing to do
+            if (e.type != EventType.MouseDown && e.type != EventType.MouseDrag
+                && e.type != EventType.MouseUp)
+                return;
 
-            u = Mathf.Clamp01(u);
-            v = Mathf.Clamp01(v);
+            if (e.button != 0) return;
 
-            int px = Mathf.Clamp(Mathf.FloorToInt(u * _labelMapSize), 0, _labelMapSize - 1);
-            int py = Mathf.Clamp(Mathf.FloorToInt(v * _labelMapSize), 0, _labelMapSize - 1);
-            int islandIdx = _labelMap[py * _labelMapSize + px];
+            bool inImage = _lastImgRect.Contains(e.mousePosition);
+            bool inViewport = viewportRect.Contains(e.mousePosition);
 
-            OnIslandClicked?.Invoke(islandIdx);
-            e.Use();
+            switch (e.type)
+            {
+                case EventType.MouseDown when inViewport && inImage:
+                    if (settings.IsPaintMode && painter != null)
+                    {
+                        // Claim hotControl so no other IMGUI control steals drag events
+                        GUIUtility.hotControl = _paintControlId;
+
+                        painter.SaveUndoState();
+                        float u = (e.mousePosition.x - _lastImgRect.x) / _lastImgRect.width;
+                        float v = 1f - (e.mousePosition.y - _lastImgRect.y) / _lastImgRect.height;
+                        _lastPaintUV = new Vector2(Mathf.Clamp01(u), Mathf.Clamp01(v));
+
+                        painter.PaintDot(_lastPaintUV, settings.BrushSize, settings.EraseMode);
+                        _isPaintingValid = true;
+                        _paintDirty = true;
+                        e.Use();
+                    }
+                    else if (!settings.IsPaintMode && _labelMap != null && _labelMapSize > 0)
+                    {
+                        float u = (e.mousePosition.x - _lastImgRect.x) / _lastImgRect.width;
+                        float v = 1f - (e.mousePosition.y - _lastImgRect.y) / _lastImgRect.height;
+
+                        int px = Mathf.Clamp(Mathf.FloorToInt(Mathf.Clamp01(u) * _labelMapSize), 0, _labelMapSize - 1);
+                        int py = Mathf.Clamp(Mathf.FloorToInt(Mathf.Clamp01(v) * _labelMapSize), 0, _labelMapSize - 1);
+                        int islandIdx = _labelMap[py * _labelMapSize + px];
+
+                        OnIslandClicked?.Invoke(islandIdx);
+                        e.Use();
+                    }
+                    break;
+
+                case EventType.MouseDrag when GUIUtility.hotControl == _paintControlId:
+                    if (settings.IsPaintMode && painter != null && _isPaintingValid)
+                    {
+                        float u = (e.mousePosition.x - _lastImgRect.x) / _lastImgRect.width;
+                        float v = 1f - (e.mousePosition.y - _lastImgRect.y) / _lastImgRect.height;
+                        Vector2 currentUV = new Vector2(Mathf.Clamp01(u), Mathf.Clamp01(v));
+
+                        painter.PaintLine(_lastPaintUV, currentUV, settings.BrushSize, settings.EraseMode);
+                        _lastPaintUV = currentUV;
+                        _paintDirty = true;
+                        e.Use();
+                    }
+                    break;
+
+                case EventType.MouseUp when GUIUtility.hotControl == _paintControlId:
+                    // Release hotControl
+                    GUIUtility.hotControl = 0;
+                    if (_isPaintingValid)
+                    {
+                        _isPaintingValid = false;
+                        // Full regeneration on stroke finish to apply Invert/Dilate correctly
+                        _dirty = true;
+                        OnPaintStrokeFinished?.Invoke();
+                    }
+                    e.Use();
+                    break;
+            }
         }
 
         // ────────────────────────────────────────────────────────────────────────
@@ -263,18 +352,140 @@ namespace Dennoko.UVTools.UI
             }
         }
 
-        private void RegenerateTextures(UVAnalysis analysis, HashSet<int> selectedIslands, MaskSettings settings)
+        /// <summary>
+        /// Full regeneration: rebuilds island mask from scratch, applies paint, invert, dilate.
+        /// Called when selection/settings change or on stroke finish.
+        /// </summary>
+        private void RegenerateTexturesFull(UVAnalysis analysis, HashSet<int> selectedIslands, MaskSettings settings, MaskPainter painter)
         {
             int size = settings.TextureSize;
-            var mask = MaskBuilder.BuildProcessedMask(analysis, selectedIslands, size, size, settings.PixelMargin, settings.InvertMask);
+            if (painter != null) painter.EnsureSize(size);
 
-            var pixels = MaskBuilder.MaskToColors(mask, (Color32)settings.PreviewFillSelectedColor, new Color32(255, 255, 255, 255));
-            _previewTex.SetPixels32(pixels);
+            // Build and cache island mask
+            _cachedIslandMask = MaskBuilder.BuildUnionMask(analysis, selectedIslands, size, size);
+
+            // Build full processed mask (merge paint + invert + dilate)
+            var mask = MaskBuilder.BuildProcessedMask(analysis, selectedIslands, size, size,
+                settings.PixelMargin, settings.InvertMask, painter?.Mask);
+
+            // Ensure pixel buffers
+            int pixelCount = size * size;
+            if (_cachedPixels == null || _cachedPixels.Length != pixelCount)
+                _cachedPixels = new Color32[pixelCount];
+            if (_cachedOverlayPixels == null || _cachedOverlayPixels.Length != pixelCount)
+                _cachedOverlayPixels = new Color32[pixelCount];
+
+            // Convert to colors (reuse arrays)
+            var selColor = (Color32)settings.PreviewFillSelectedColor;
+            var unselColor = new Color32(255, 255, 255, 255);
+            byte overlayAlpha = (byte)Mathf.Clamp(Mathf.RoundToInt(settings.PreviewOverlayAlpha * 255f), 0, 255);
+            var overlayCol = selColor;
+            overlayCol.a = overlayAlpha;
+            var transparent = new Color32(0, 0, 0, 0);
+
+            for (int i = 0; i < pixelCount; i++)
+            {
+                bool selected = mask[i] != 0;
+                _cachedPixels[i] = selected ? selColor : unselColor;
+                _cachedOverlayPixels[i] = selected ? overlayCol : transparent;
+            }
+
+            _previewTex.SetPixels32(_cachedPixels);
             _previewTex.Apply(false, false);
 
-            var overlay = MaskBuilder.MaskToOverlay(mask, settings.PreviewFillSelectedColor, settings.PreviewOverlayAlpha);
-            _overlayTex.SetPixels32(overlay);
+            _overlayTex.SetPixels32(_cachedOverlayPixels);
             _overlayTex.Apply(false, false);
+
+            // Clear painter dirty tiles after full regen
+            if (painter != null) painter.ClearDirtyTiles();
+        }
+
+        /// <summary>
+        /// Incremental update: only recomputes pixels in dirty tiles, then uploads both textures.
+        /// Skips Invert/Dilate for speed — those are applied on stroke finish via full regen.
+        /// Uses cached island mask + paint mask merged directly.
+        /// Updates BOTH _previewTex and _overlayTex so the preview is correct in both
+        /// direct mode and overlay mode.
+        /// </summary>
+        private void RegeneratePaintIncremental(MaskSettings settings, MaskPainter painter)
+        {
+            int size = settings.TextureSize;
+            if (_cachedIslandMask == null || _cachedIslandMask.Length != size * size)
+            {
+                // Fallback to full regen if no cache available
+                _dirty = true;
+                return;
+            }
+            int pixelCount = size * size;
+            if (_cachedPixels == null || _cachedPixels.Length != pixelCount)
+            {
+                _dirty = true;
+                return;
+            }
+            if (_cachedOverlayPixels == null || _cachedOverlayPixels.Length != pixelCount)
+            {
+                _dirty = true;
+                return;
+            }
+
+            var paintMask = painter.Mask;
+            var dirtyTiles = painter.DirtyTiles;
+            int gridDim = MaskPainter.TileGridDim;
+
+            var selColor = (Color32)settings.PreviewFillSelectedColor;
+            var unselColor = new Color32(255, 255, 255, 255);
+
+            // Overlay colors
+            byte overlayAlpha = (byte)Mathf.Clamp(Mathf.RoundToInt(settings.PreviewOverlayAlpha * 255f), 0, 255);
+            var overlayCol = selColor;
+            overlayCol.a = overlayAlpha;
+            var transparent = new Color32(0, 0, 0, 0);
+
+            int tileW = size / gridDim;
+            int tileH = size / gridDim;
+
+            for (int ty = 0; ty < gridDim; ty++)
+            {
+                for (int tx = 0; tx < gridDim; tx++)
+                {
+                    if (!dirtyTiles[ty * gridDim + tx]) continue;
+
+                    int startX = tx * tileW;
+                    int startY = ty * tileH;
+                    int endX = (tx == gridDim - 1) ? size : startX + tileW;
+                    int endY = (ty == gridDim - 1) ? size : startY + tileH;
+
+                    for (int y = startY; y < endY; y++)
+                    {
+                        int rowBase = y * size;
+                        for (int x = startX; x < endX; x++)
+                        {
+                            int idx = rowBase + x;
+                            bool selected = (_cachedIslandMask[idx] | paintMask[idx]) != 0;
+                            _cachedPixels[idx] = selected ? selColor : unselColor;
+                            _cachedOverlayPixels[idx] = selected ? overlayCol : transparent;
+                        }
+                    }
+                }
+            }
+
+            // Upload full pixel arrays (reliable across all Unity versions)
+            _previewTex.SetPixels32(_cachedPixels);
+            _previewTex.Apply(false, false);
+
+            _overlayTex.SetPixels32(_cachedOverlayPixels);
+            _overlayTex.Apply(false, false);
+
+            painter.ClearDirtyTiles();
+        }
+
+        /// <summary>Reusable buffer for tile sub-rect pixel uploads.</summary>
+        private Color32[] _tileBuffer;
+
+        private void EnsureTileBuffer(int minSize)
+        {
+            if (_tileBuffer == null || _tileBuffer.Length < minSize)
+                _tileBuffer = new Color32[minSize];
         }
 
         // ────────────────────────────────────────────────────────────────────────
@@ -327,7 +538,6 @@ namespace Dennoko.UVTools.UI
 
         private void DrawFrame()
         {
-            // Draw 1px border around the _viewportRect
             float x = _viewportRect.x, y = _viewportRect.y;
             float xMax = _viewportRect.xMax, yMax = _viewportRect.yMax;
             Handles.BeginGUI();

@@ -110,7 +110,7 @@ namespace Dennoko.UVTools.UI
             // Save button (primary action)
             GUI.enabled = hasAnalysis;
             if (EditorUIStyles.DrawPrimaryButton(
-                "💾 " + _localization["save_png"],
+                _localization["save_png"],
                 _localization["save_png_tooltip"],
                 160))
             {
@@ -124,7 +124,7 @@ namespace Dennoko.UVTools.UI
         private void DrawOutputSettingsSection(MaskSettings settings, string baseTexturePath)
         {
             _outputSettingsExpanded = EditorUIStyles.DrawCollapsibleHeader(
-                "📁 " + _localization.Get("output_settings", "出力設定"),
+                _localization.Get("output_settings", "出力設定"),
                 _outputSettingsExpanded,
                 _localization.Get("output_settings_tooltip", "ファイル名、出力先などの詳細設定"));
 

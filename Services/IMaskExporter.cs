@@ -53,5 +53,8 @@ namespace Dennoko.UVTools.Services
 
         // Base texture for channel-wise writing
         public Texture2D BasePNG = null;
+
+        // Hand-painted mask layer (optional, OR-merged with island selections)
+        public byte[] PaintMask = null;
     }
 }

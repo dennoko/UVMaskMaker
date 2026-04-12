@@ -40,6 +40,7 @@ namespace Dennoko.UVTools
         private OverlayRenderer   _overlayRenderer;
         private WorkCopyService   _workCopyService;
         private UVPreviewDrawer   _previewDrawer;
+        private MaskPainter       _maskPainter;
         private IMaskExporter     _exporter;
 
         // ── UI Drawers (non-selection sections) ───────────────────────────────
@@ -110,6 +111,7 @@ namespace Dennoko.UVTools
             InitializeDrawers();
             LoadAssetReferences();
             SubscribeToEvents();
+            wantsMouseMove = true;
         }
 
         private void InitializeServices()
@@ -122,6 +124,7 @@ namespace Dennoko.UVTools
             _overlayRenderer = new OverlayRenderer();
             _workCopyService = new WorkCopyService();
             _previewDrawer   = new UVPreviewDrawer();
+            _maskPainter     = new MaskPainter(_settings.TextureSize);
             _exporter        = new PngExporter();
         }
 
@@ -169,6 +172,7 @@ namespace Dennoko.UVTools
 
             // Preview drawer: repaint on view change
             _previewDrawer.OnIslandClicked += OnPreviewIslandClicked;
+            _previewDrawer.OnPaintStrokeFinished += OnPaintStrokeFinished;
             _previewDrawer.OnViewChanged   += Repaint;
         }
 
@@ -210,6 +214,7 @@ namespace Dennoko.UVTools
             SceneView.duringSceneGui += OnSceneGUI;
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
             EditorSceneManager.sceneSaving += OnSceneSaving;
+            EditorApplication.update += EditorUpdate;
         }
 
         private void OnDisable()
@@ -217,9 +222,16 @@ namespace Dennoko.UVTools
             SceneView.duringSceneGui -= OnSceneGUI;
             EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
             EditorSceneManager.sceneSaving -= OnSceneSaving;
+            EditorApplication.update -= EditorUpdate;
 
             if (_settingsManager != null && _settings != null) _settingsManager.Save(_settings);
             _pickingService?.Dispose();
+
+            // Restore original visibility if needed
+            if (_isWorkCopy && _sourceTargetGO != null)
+            {
+                _sourceTargetGO.SetActive(true);
+            }
 
             if (_previewDrawer != null)
             {
@@ -236,6 +248,18 @@ namespace Dennoko.UVTools
 
         private void OnPlayModeStateChanged(PlayModeStateChange state) { }
         private void OnSceneSaving(UnityEngine.SceneManagement.Scene scene, string path) => _pickingService?.Cleanup();
+
+        /// <summary>
+        /// Called every editor frame. Forces continuous repainting during active paint strokes
+        /// so the preview texture updates in real-time rather than on mouse release.
+        /// </summary>
+        private void EditorUpdate()
+        {
+            if (_previewDrawer != null && _previewDrawer.IsPainting)
+            {
+                Repaint();
+            }
+        }
 
         // ─────────────────────────────────────────────────────────────────────
         // OnGUI — 3-zone layout
@@ -293,11 +317,47 @@ namespace Dennoko.UVTools
 
         private void DrawPreviewZone(float w, float h)
         {
-            // Toolbar row (Surface2 background)
-            using (new EditorGUILayout.HorizontalScope(EditorUIStyles.ToolbarStyle, GUILayout.Height(26)))
+            const float headerH = 26f;
+            const float footerH = 26f;
+            const float pad     = 4f;
+
+            // ── Header: PREVIEW title + Undo/Redo/Clear + zoom + reset ──
+            using (new EditorGUILayout.HorizontalScope(EditorUIStyles.ToolbarStyle, GUILayout.Height(headerH)))
             {
                 GUILayout.Space(4);
                 GUILayout.Label("PREVIEW", EditorUIStyles.SectionHeaderSmallStyle);
+
+                GUILayout.Space(8);
+
+                // Paint action buttons (always visible, disabled when no paint data)
+                EditorGUI.BeginDisabledGroup(!_maskPainter.HasUndo);
+                if (GUILayout.Button(_localization.Get("tool_undo", "Undo"), EditorStyles.toolbarButton, GUILayout.Width(48)))
+                {
+                    _maskPainter.Undo();
+                    _previewDirty = true;
+                }
+                EditorGUI.EndDisabledGroup();
+
+                EditorGUI.BeginDisabledGroup(!_maskPainter.HasRedo);
+                if (GUILayout.Button(_localization.Get("tool_redo", "Redo"), EditorStyles.toolbarButton, GUILayout.Width(48)))
+                {
+                    _maskPainter.Redo();
+                    _previewDirty = true;
+                }
+                EditorGUI.EndDisabledGroup();
+
+                if (GUILayout.Button(_localization.Get("tool_clear", "Clear"), EditorStyles.toolbarButton, GUILayout.Width(48)))
+                {
+                    if (EditorUtility.DisplayDialog(
+                        _localization.Get("tool_clear", "Clear"),
+                        _localization.Get("tool_clear_confirm", "Clear all paint?"),
+                        "OK", "Cancel"))
+                    {
+                        _maskPainter.Clear();
+                        _previewDirty = true;
+                    }
+                }
+
                 GUILayout.FlexibleSpace();
 
                 // Zoom indicator
@@ -311,7 +371,7 @@ namespace Dennoko.UVTools
 
                 // Reset view button
                 if (GUILayout.Button(
-                    new GUIContent("size reset", _localization.Get("preview_reset_view", "ビューをリセット")),
+                    new GUIContent("reset", _localization.Get("preview_reset_view", "ビューをリセット")),
                     EditorStyles.toolbarButton))
                 {
                     _previewDrawer.ResetView();
@@ -319,10 +379,8 @@ namespace Dennoko.UVTools
                 GUILayout.Space(4);
             }
 
-            // Preview content
-            const float toolbarH = 26f;
-            const float pad      = 4f;
-            var contentRect = new Rect(pad, toolbarH + pad, w - pad * 2f, h - toolbarH - pad * 2f);
+            // ── Preview content ──
+            var contentRect = new Rect(pad, headerH + pad, w - pad * 2f, h - headerH - footerH - pad * 2f);
 
             if (_previewDirty)
             {
@@ -336,7 +394,69 @@ namespace Dennoko.UVTools
                 _selectedIslands,
                 _settings,
                 _settings.PreviewOverlayBaseTex ? GetBaseTexture() : null,
+                _maskPainter,
                 _localization);
+
+            // ── Footer: Mode toggle + Brush Size + Eraser ──
+            DrawPaintFooter(w, h, footerH);
+        }
+
+        private void DrawPaintFooter(float w, float h, float footerH)
+        {
+            var r = new Rect(0, h - footerH, w, footerH);
+            GUILayout.BeginArea(r);
+            using (new EditorGUILayout.HorizontalScope(EditorUIStyles.ToolbarStyle, GUILayout.Height(footerH)))
+            {
+                GUILayout.Space(4);
+
+                // Tool Mode Toggle
+                int toolMode = _settings.IsPaintMode ? 1 : 0;
+                GUIContent[] modes = new GUIContent[] {
+                    new GUIContent(_localization.Get("tool_select", "Select")),
+                    new GUIContent(_localization.Get("tool_paint", "Paint"))
+                };
+                int newMode = GUILayout.Toolbar(toolMode, modes, GUILayout.Width(120));
+                if (newMode != toolMode)
+                {
+                    _settings.IsPaintMode = (newMode == 1);
+                    _settingsManager.Save(_settings);
+                }
+
+                GUILayout.Space(10);
+                
+                EditorGUI.BeginDisabledGroup(!_settings.IsPaintMode);
+
+                // Brush Size
+                GUILayout.Label(_localization.Get("brush_size", "Size"), GUILayout.Width(35));
+                int newSize = (int)GUILayout.HorizontalSlider(_settings.BrushSize, 1, 100, GUILayout.Width(80));
+                if (newSize != _settings.BrushSize)
+                {
+                    _settings.BrushSize = newSize;
+                    _settingsManager.Save(_settings);
+                }
+
+                GUILayout.Space(10);
+
+                // Eraser Toggle
+                var oldBg = GUI.backgroundColor;
+                if (_settings.EraseMode) GUI.backgroundColor = EditorUIStyles.AccentBlue;
+
+                bool newEraser = GUILayout.Toggle(_settings.EraseMode, _localization.Get("tool_eraser", "Eraser"), EditorStyles.toolbarButton, GUILayout.Width(60));
+                
+                GUI.backgroundColor = oldBg;
+
+                if (newEraser != _settings.EraseMode)
+                {
+                    _settings.EraseMode = newEraser;
+                    _settingsManager.Save(_settings);
+                }
+                
+                EditorGUI.EndDisabledGroup();
+                
+                GUILayout.FlexibleSpace();
+                GUILayout.Space(4);
+            }
+            GUILayout.EndArea();
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -384,21 +504,6 @@ namespace Dennoko.UVTools
             EditorUIStyles.BeginCard(_localization.Get("island_selection", "アイランド選択"));
 
             GUI.enabled = _analysis != null;
-
-            // Island count label
-            if (_analysis != null)
-            {
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    GUILayout.FlexibleSpace();
-                    string countText = string.Format(
-                        _localization.Get("selection_count_fmt", "{0} / {1} 選択中"),
-                        _selectedIslands.Count, _analysis.Islands.Count);
-                    GUILayout.Label(countText, EditorUIStyles.CaptionStyle);
-                    GUILayout.FlexibleSpace();
-                }
-                EditorGUILayout.Space(2);
-            }
 
             // Add / Remove mode toolbar (centred)
             using (new EditorGUILayout.HorizontalScope())
@@ -563,6 +668,7 @@ namespace Dennoko.UVTools
             if (_targetGO != null && _isWorkCopy && _targetGO != go)
             {
                 Log($"[SetTarget] Auto-cleaning up work copy '{_targetGO.name}'");
+                if (_sourceTargetGO != null) _sourceTargetGO.SetActive(true);
                 _workCopyService.CleanupWorkCopy(_targetGO);
                 _isWorkCopy = false;
             }
@@ -704,8 +810,9 @@ namespace Dennoko.UVTools
 
         private void SetupWorkCopy()
         {
-            if (_targetRenderer == null || _isWorkCopy) return;
+            if (_targetRenderer == null || _isWorkCopy || _targetGO == null) return;
             _sourceTargetGO = _targetGO;
+            
             var copy = _workCopyService.CreateWorkCopy(_targetRenderer, _settings.WorkCopyOffset);
             if (copy != null)
             {
@@ -718,6 +825,7 @@ namespace Dennoko.UVTools
         {
             if (!_isWorkCopy || _targetGO == null) return;
             var original = _sourceTargetGO;
+            
             _suppressAutoWorkCopy = true;
             try
             {
@@ -762,6 +870,12 @@ namespace Dennoko.UVTools
             Repaint();
             SceneView.RepaintAll();
             Log($"[PreviewClick] island={islandIdx} TOGGLE → {(_selectedIslands.Contains(islandIdx) ? "SELECTED" : "DESELECTED")}");
+        }
+
+        private void OnPaintStrokeFinished()
+        {
+            _settingsManager.Save(_settings); // save brush size or state if needed
+            Repaint();
         }
 
         private Texture GetBaseTexture()
@@ -856,7 +970,8 @@ namespace Dennoko.UVTools
                 ChannelWriteEnabled  = _settings.ChannelWriteEnabled,
                 WriteR = _settings.WriteR, WriteG = _settings.WriteG,
                 WriteB = _settings.WriteB, WriteA = _settings.WriteA,
-                BasePNG = _basePNG
+                BasePNG = _basePNG,
+                PaintMask = _maskPainter?.Mask
             };
 
             if (_exporter.Export(_analysis, _selectedIslands, exportSettings, fullPath))
@@ -876,7 +991,8 @@ namespace Dennoko.UVTools
                         ChannelWriteEnabled = exportSettings.ChannelWriteEnabled,
                         WriteR = exportSettings.WriteR, WriteG = exportSettings.WriteG,
                         WriteB = exportSettings.WriteB, WriteA = exportSettings.WriteA,
-                        BasePNG = exportSettings.BasePNG
+                        BasePNG = exportSettings.BasePNG,
+                        PaintMask = exportSettings.PaintMask
                     };
                     string dir      = Path.GetDirectoryName(fullPath);
                     string nameBase = Path.GetFileNameWithoutExtension(fullPath);
