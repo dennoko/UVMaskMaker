@@ -905,7 +905,7 @@ namespace Dennoko.UVTools
             var prev = RenderTexture.active;
             RenderTexture.active = rt;
 
-            var readable = new Texture2D(size, size, TextureFormat.RGBA32, false, true);
+            var readable = new Texture2D(size, size, TextureFormat.RGBA32, false, true /* linear */);
             readable.ReadPixels(new Rect(0, 0, size, size), 0, 0);
             readable.Apply();
 
@@ -928,6 +928,7 @@ namespace Dennoko.UVTools
                     mask[i] = 255;
             }
 
+            // _readable was created with new Texture2D (not an asset), DestroyImmediate is safe here.
             DestroyImmediate(readable);
 
             _maskPainter.MarkAllTilesDirty();

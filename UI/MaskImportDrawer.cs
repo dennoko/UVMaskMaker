@@ -17,7 +17,7 @@ namespace Dennoko.UVTools.UI
         private readonly LocalizationService _localization;
 
         private Texture2D _importTex;
-        private int _blackThreshold = 128; // 0-255: pixels darker than this are treated as "black" (128 = midpoint of 0-255 range)
+        private int _blackThreshold = 128; // 0-255: pixels darker than this are treated as "black" (default middle value)
 
         public MaskImportDrawer(LocalizationService localization)
         {
