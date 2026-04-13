@@ -142,6 +142,6 @@
     "tool_eraser": "Eraser",
     "tool_undo": "Undo",
     "tool_redo": "Redo",
-    "tool_clear": "Clear Paint",
+    "tool_clear": "Clear",
     "tool_clear_confirm": "Clear all hand-painted data?"
 }
