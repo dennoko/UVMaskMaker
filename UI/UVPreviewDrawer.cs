@@ -54,15 +54,26 @@ namespace Dennoko.UVTools.UI
         /// <summary>Fired when zoom or pan changes (caller should Repaint).</summary>
         public event Action OnViewChanged;
 
-        // --- Paint State ---
+        // --- Paint State (Brush) ---
         private Vector2 _lastPaintUV;
         private bool _isPaintingValid = false;
         private int _paintControlId;
 
+        // --- Paint State (Rectangle) ---
+        private Vector2 _rectStartUV;
+        private Vector2 _rectCurrentUV;
+        private bool _isRectPainting = false;
+
+        // --- Paint State (Lasso) ---
+        private List<Vector2> _lassoPoints = new List<Vector2>();
+        private bool _isLassoPainting = false;
+        private Vector2 _lastLassoUV;
+        private const float LassoMinUVStep = 0.003f;
+
         // --- Public API ---
 
         /// <summary>True while a paint stroke is in progress (mouse held down in paint mode).</summary>
-        public bool IsPainting => _isPaintingValid;
+        public bool IsPainting => _isPaintingValid || _isRectPainting || _isLassoPainting;
 
         /// <summary>Current zoom level (1.0 = fit).</summary>
         public float ZoomLevel => _zoomLevel;
@@ -165,9 +176,12 @@ namespace Dennoko.UVTools.UI
         public void Dispose()
         {
             // Release hotControl if still held
-            if (_isPaintingValid && GUIUtility.hotControl == _paintControlId)
+            if ((_isPaintingValid || _isRectPainting || _isLassoPainting) && GUIUtility.hotControl == _paintControlId)
                 GUIUtility.hotControl = 0;
             _isPaintingValid = false;
+            _isRectPainting = false;
+            _isLassoPainting = false;
+            _lassoPoints.Clear();
 
             DestroyTex(ref _previewTex);
             DestroyTex(ref _overlayTex);
@@ -246,7 +260,7 @@ namespace Dennoko.UVTools.UI
 
             if (e.button != 0) return;
 
-            bool inImage = _lastImgRect.Contains(e.mousePosition);
+            bool inImage    = _lastImgRect.Contains(e.mousePosition);
             bool inViewport = viewportRect.Contains(e.mousePosition);
 
             switch (e.type)
@@ -257,14 +271,36 @@ namespace Dennoko.UVTools.UI
                         // Claim hotControl so no other IMGUI control steals drag events
                         GUIUtility.hotControl = _paintControlId;
 
-                        painter.SaveUndoState();
                         float u = (e.mousePosition.x - _lastImgRect.x) / _lastImgRect.width;
                         float v = 1f - (e.mousePosition.y - _lastImgRect.y) / _lastImgRect.height;
-                        _lastPaintUV = new Vector2(Mathf.Clamp01(u), Mathf.Clamp01(v));
+                        Vector2 startUV = new Vector2(Mathf.Clamp01(u), Mathf.Clamp01(v));
 
-                        painter.PaintDot(_lastPaintUV, settings.BrushSize, settings.EraseMode);
-                        _isPaintingValid = true;
-                        _paintDirty = true;
+                        switch (settings.PaintSubMode)
+                        {
+                            case PaintSubMode.Brush:
+                            case PaintSubMode.Eraser:
+                                painter.SaveUndoState();
+                                _lastPaintUV = startUV;
+                                painter.PaintDot(_lastPaintUV, settings.BrushSize, settings.PaintSubMode == PaintSubMode.Eraser);
+                                _isPaintingValid = true;
+                                _paintDirty = true;
+                                break;
+
+                            case PaintSubMode.Rect:
+                                painter.SaveUndoState();
+                                _rectStartUV    = startUV;
+                                _rectCurrentUV  = startUV;
+                                _isRectPainting = true;
+                                break;
+
+                            case PaintSubMode.Lasso:
+                                painter.SaveUndoState();
+                                _lassoPoints.Clear();
+                                _lassoPoints.Add(startUV);
+                                _lastLassoUV     = startUV;
+                                _isLassoPainting = true;
+                                break;
+                        }
                         e.Use();
                     }
                     else if (!settings.IsPaintMode && _labelMap != null && _labelMapSize > 0)
@@ -282,29 +318,69 @@ namespace Dennoko.UVTools.UI
                     break;
 
                 case EventType.MouseDrag when GUIUtility.hotControl == _paintControlId:
-                    if (settings.IsPaintMode && painter != null && _isPaintingValid)
+                    if (settings.IsPaintMode && painter != null)
                     {
                         float u = (e.mousePosition.x - _lastImgRect.x) / _lastImgRect.width;
                         float v = 1f - (e.mousePosition.y - _lastImgRect.y) / _lastImgRect.height;
                         Vector2 currentUV = new Vector2(Mathf.Clamp01(u), Mathf.Clamp01(v));
 
-                        painter.PaintLine(_lastPaintUV, currentUV, settings.BrushSize, settings.EraseMode);
-                        _lastPaintUV = currentUV;
-                        _paintDirty = true;
+                        if (_isPaintingValid)
+                        {
+                            bool erase = settings.PaintSubMode == PaintSubMode.Eraser;
+                            painter.PaintLine(_lastPaintUV, currentUV, settings.BrushSize, erase);
+                            _lastPaintUV = currentUV;
+                            _paintDirty = true;
+                        }
+                        else if (_isRectPainting)
+                        {
+                            _rectCurrentUV = currentUV;
+                            // No texture update needed during drag — EditorUpdate drives repaints via IsPainting
+                        }
+                        else if (_isLassoPainting)
+                        {
+                            if (Vector2.Distance(currentUV, _lastLassoUV) >= LassoMinUVStep)
+                            {
+                                _lassoPoints.Add(currentUV);
+                                _lastLassoUV = currentUV;
+                            }
+                        }
                         e.Use();
                     }
                     break;
 
                 case EventType.MouseUp when GUIUtility.hotControl == _paintControlId:
-                    // Release hotControl
                     GUIUtility.hotControl = 0;
+
                     if (_isPaintingValid)
                     {
                         _isPaintingValid = false;
-                        // Full regeneration on stroke finish to apply Invert/Dilate correctly
                         _dirty = true;
                         OnPaintStrokeFinished?.Invoke();
                     }
+                    else if (_isRectPainting)
+                    {
+                        float u = (e.mousePosition.x - _lastImgRect.x) / _lastImgRect.width;
+                        float v = 1f - (e.mousePosition.y - _lastImgRect.y) / _lastImgRect.height;
+                        _rectCurrentUV = new Vector2(Mathf.Clamp01(u), Mathf.Clamp01(v));
+
+                        painter?.PaintRect(_rectStartUV, _rectCurrentUV, false);
+                        _isRectPainting = false;
+                        _dirty = true;
+                        OnPaintStrokeFinished?.Invoke();
+                    }
+                    else if (_isLassoPainting)
+                    {
+                        float u = (e.mousePosition.x - _lastImgRect.x) / _lastImgRect.width;
+                        float v = 1f - (e.mousePosition.y - _lastImgRect.y) / _lastImgRect.height;
+                        _lassoPoints.Add(new Vector2(Mathf.Clamp01(u), Mathf.Clamp01(v)));
+
+                        painter?.PaintPolygon(_lassoPoints, false);
+                        _lassoPoints.Clear();
+                        _isLassoPainting = false;
+                        _dirty = true;
+                        OnPaintStrokeFinished?.Invoke();
+                    }
+
                     e.Use();
                     break;
             }
@@ -530,6 +606,14 @@ namespace Dennoko.UVTools.UI
                 Handles.EndGUI();
             }
 
+            // Rectangle selection preview
+            if (_isRectPainting)
+                DrawRectPreview(localLastImgRect);
+
+            // Lasso stroke preview
+            if (_isLassoPainting && _lassoPoints.Count >= 2)
+                DrawLassoPreview(localLastImgRect);
+
             GUI.EndGroup();
 
             // Frame around base square (at zoom=1 boundary indicator)
@@ -546,6 +630,61 @@ namespace Dennoko.UVTools.UI
             Handles.DrawLine(new Vector3(xMax, y),    new Vector3(xMax, yMax));
             Handles.DrawLine(new Vector3(xMax, yMax), new Vector3(x,    yMax));
             Handles.DrawLine(new Vector3(x,    yMax), new Vector3(x,    y));
+            Handles.EndGUI();
+        }
+
+        private void DrawRectPreview(Rect localImgRect)
+        {
+            float x0 = localImgRect.x + _rectStartUV.x   * localImgRect.width;
+            float y0 = localImgRect.y + (1f - _rectStartUV.y)   * localImgRect.height;
+            float x1 = localImgRect.x + _rectCurrentUV.x * localImgRect.width;
+            float y1 = localImgRect.y + (1f - _rectCurrentUV.y) * localImgRect.height;
+
+            float rx = Mathf.Min(x0, x1);
+            float ry = Mathf.Min(y0, y1);
+            float rw = Mathf.Abs(x1 - x0);
+            float rh = Mathf.Abs(y1 - y0);
+
+            EditorGUI.DrawRect(new Rect(rx, ry, rw, rh), new Color(0.3f, 0.7f, 1f, 0.25f));
+
+            Handles.BeginGUI();
+            Handles.color = Color.cyan;
+            var tl = new Vector3(rx,      ry);
+            var tr = new Vector3(rx + rw, ry);
+            var br = new Vector3(rx + rw, ry + rh);
+            var bl = new Vector3(rx,      ry + rh);
+            Handles.DrawLine(tl, tr);
+            Handles.DrawLine(tr, br);
+            Handles.DrawLine(br, bl);
+            Handles.DrawLine(bl, tl);
+            Handles.EndGUI();
+        }
+
+        private void DrawLassoPreview(Rect localImgRect)
+        {
+            Handles.BeginGUI();
+            Handles.color = Color.yellow;
+
+            for (int i = 0; i < _lassoPoints.Count - 1; i++)
+            {
+                float ax = localImgRect.x + _lassoPoints[i].x     * localImgRect.width;
+                float ay = localImgRect.y + (1f - _lassoPoints[i].y)     * localImgRect.height;
+                float bx = localImgRect.x + _lassoPoints[i + 1].x * localImgRect.width;
+                float by = localImgRect.y + (1f - _lassoPoints[i + 1].y) * localImgRect.height;
+                Handles.DrawLine(new Vector3(ax, ay), new Vector3(bx, by));
+            }
+
+            // Closing dashed line (last point → first point)
+            if (_lassoPoints.Count >= 3)
+            {
+                float ax = localImgRect.x + _lassoPoints[_lassoPoints.Count - 1].x * localImgRect.width;
+                float ay = localImgRect.y + (1f - _lassoPoints[_lassoPoints.Count - 1].y) * localImgRect.height;
+                float bx = localImgRect.x + _lassoPoints[0].x * localImgRect.width;
+                float by = localImgRect.y + (1f - _lassoPoints[0].y) * localImgRect.height;
+                Handles.color = new Color(1f, 1f, 0f, 0.5f);
+                Handles.DrawDottedLine(new Vector3(ax, ay), new Vector3(bx, by), 5f);
+            }
+
             Handles.EndGUI();
         }
 
