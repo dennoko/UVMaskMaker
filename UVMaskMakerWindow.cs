@@ -45,6 +45,7 @@ namespace Dennoko.UVTools
 
         // ── UI Drawers (non-selection sections) ───────────────────────────────
         private TargetSectionDrawer  _targetDrawer;
+        private MaskImportDrawer     _maskImportDrawer;
         private ExportSectionDrawer  _exportDrawer;
         private AdvancedOptionsDrawer _advancedDrawer;
 
@@ -131,6 +132,7 @@ namespace Dennoko.UVTools
         private void InitializeDrawers()
         {
             _targetDrawer   = new TargetSectionDrawer(_localization);
+            _maskImportDrawer = new MaskImportDrawer(_localization);
             _exportDrawer   = new ExportSectionDrawer(_localization);
             _advancedDrawer = new AdvancedOptionsDrawer(_localization);
 
@@ -151,6 +153,9 @@ namespace Dennoko.UVTools
                 _settingsManager.Save(_settings);
                 AnalyzeTargetMesh();
             };
+
+            // Mask import drawer events
+            _maskImportDrawer.OnLoadClicked += LoadMaskImage;
 
             // Export drawer events
             _exportDrawer.OnSaveClicked           += SaveMaskPNG;
@@ -469,6 +474,11 @@ namespace Dennoko.UVTools
 
             // ── STEP 1: Target ────────────────────────────────────────────────
             _targetDrawer.Draw(_targetGO, _targetRenderer, _settings, _isWorkCopy);
+
+            EditorGUILayout.Space(EditorUIStyles.CardSpacing);
+
+            // ── Mask Image Import ─────────────────────────────────────────────
+            _maskImportDrawer.Draw();
 
             EditorGUILayout.Space(EditorUIStyles.CardSpacing);
 
@@ -876,6 +886,58 @@ namespace Dennoko.UVTools
         {
             _settingsManager.Save(_settings); // save brush size or state if needed
             Repaint();
+        }
+
+        /// <summary>
+        /// Loads an existing mask image and applies its black regions to the paint mask.
+        /// Pixels whose luminance is below the threshold (0-255) are treated as "painted" (255).
+        /// </summary>
+        private void LoadMaskImage(Texture2D sourceTex, int blackThreshold)
+        {
+            if (sourceTex == null) return;
+
+            int size = _settings.TextureSize;
+            _maskPainter.EnsureSize(size);
+
+            // Make a temporary readable copy of the texture at the target resolution
+            var rt = RenderTexture.GetTemporary(size, size, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
+            Graphics.Blit(sourceTex, rt);
+            var prev = RenderTexture.active;
+            RenderTexture.active = rt;
+
+            var readable = new Texture2D(size, size, TextureFormat.RGBA32, false, true);
+            readable.ReadPixels(new Rect(0, 0, size, size), 0, 0);
+            readable.Apply();
+
+            RenderTexture.active = prev;
+            RenderTexture.ReleaseTemporary(rt);
+
+            _maskPainter.SaveUndoState();
+
+            var pixels = readable.GetPixels32();
+            var mask   = _maskPainter.Mask;
+            float thresholdNorm = blackThreshold / 255f;
+
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                // GetPixels32() returns sRGB byte values; use perceptual (sRGB) luminance coefficients.
+                float lum = pixels[i].r / 255f * 0.299f
+                          + pixels[i].g / 255f * 0.587f
+                          + pixels[i].b / 255f * 0.114f;
+                if (lum < thresholdNorm)
+                    mask[i] = 255;
+            }
+
+            DestroyImmediate(readable);
+
+            _maskPainter.MarkAllTilesDirty();
+            _previewDirty = true;
+            Repaint();
+
+            SetStatus(
+                _localization.Get("mask_import_done", "マスク画像を読み込みました"),
+                StatusType.Success);
+            Log($"[LoadMask] Loaded mask from '{sourceTex.name}' (threshold={blackThreshold})");
         }
 
         private Texture GetBaseTexture()
