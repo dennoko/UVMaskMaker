@@ -142,8 +142,7 @@
     "tool_eraser": "消しゴム",
     "tool_undo": "戻す",
     "tool_redo": "やり直す",
-<<<<<<< HEAD
-    "tool_clear": "塗りをクリア",
+    "tool_clear": "クリア",
     "tool_clear_confirm": "手塗りのデータをすべて消去しますか？",
     "mask_import_title": "マスク画像の読み込み",
     "mask_import_drop_hint": "マスク画像をここへドラッグ",

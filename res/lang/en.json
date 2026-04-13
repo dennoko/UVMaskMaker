@@ -142,8 +142,7 @@
     "tool_eraser": "Eraser",
     "tool_undo": "Undo",
     "tool_redo": "Redo",
-<<<<<<< HEAD
-    "tool_clear": "Clear Paint",
+    "tool_clear": "Clear",
     "tool_clear_confirm": "Clear all hand-painted data?",
     "mask_import_title": "Import Mask Image",
     "mask_import_drop_hint": "Drag a mask image here",
