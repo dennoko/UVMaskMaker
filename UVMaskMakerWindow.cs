@@ -252,12 +252,15 @@ namespace Dennoko.UVTools
         /// <summary>
         /// Called every editor frame. Forces continuous repainting during active paint strokes
         /// so the preview texture updates in real-time rather than on mouse release.
+        /// Also repaints the scene view so hand-painted regions are immediately visible
+        /// on the 3D mesh via the mask overlay renderer.
         /// </summary>
         private void EditorUpdate()
         {
             if (_previewDrawer != null && _previewDrawer.IsPainting)
             {
                 Repaint();
+                SceneView.RepaintAll();
             }
         }
 
@@ -1075,7 +1078,18 @@ namespace Dennoko.UVTools
             if (_analysis != null && _targetTransform != null)
             {
                 _overlayRenderer.DrawSeams(_analysis, _targetTransform, _settings, _bakedMesh, _settings.UseBakedMesh);
-                _overlayRenderer.DrawSelectedIslands(_analysis, _selectedIslands, _targetTransform, _settings, _targetRenderer, sv, _bakedMesh, _settings.UseBakedMesh);
+
+                // Replace wireframe island overlay with texture-based mask overlay.
+                // The overlay texture encodes both island selection and hand-painted regions,
+                // so the scene view always reflects the current state of the preview —
+                // including strokes from the hand-drawing tool.
+                var overlayTex = _previewDrawer.OverlayTexture;
+                if (overlayTex != null)
+                {
+                    _overlayRenderer.DrawMaskOverlay(
+                        _analysis, _targetTransform, _settings, overlayTex,
+                        _bakedMesh, _settings.UseBakedMesh);
+                }
             }
 
             if (_analysis != null && e.type == EventType.MouseDown && e.button == 0)
