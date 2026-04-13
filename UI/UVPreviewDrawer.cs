@@ -78,6 +78,16 @@ namespace Dennoko.UVTools.UI
         /// <summary>Current zoom level (1.0 = fit).</summary>
         public float ZoomLevel => _zoomLevel;
 
+        /// <summary>
+        /// The semi-transparent overlay texture that encodes the current selection and
+        /// hand-painted mask.  Selected / painted pixels carry the selection colour with
+        /// a configurable alpha; unselected pixels are fully transparent.
+        /// This texture can be projected onto the 3D mesh in the scene view so that
+        /// hand-painted regions are immediately visible on the object.
+        /// Returns null until the first preview has been rendered.
+        /// </summary>
+        public Texture2D OverlayTexture => _overlayTex;
+
         /// <summary>Marks the preview texture as needing full regeneration.</summary>
         public void MarkDirty()
         {
