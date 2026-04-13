@@ -18,7 +18,7 @@ This document explains how to use **MaskMaker** (`Tools > MaskMaker`). It is a t
 ## Basic Steps
 
 ### STEP 1: Set Target Model
-1. Open `Tools > MaskMaker` from the menu.
+1. Open `dennokoworks > MaskMaker` from the menu.
 2. Drag and drop the target GameObject into the `Target Model` frame.
 3. Select the **Target Material** (if extracting from a specific submesh) and **UV Channel** (usually UV0).
    - *Note: UV analysis is executed automatically when the target is set.*

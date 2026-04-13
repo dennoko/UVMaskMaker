@@ -86,7 +86,7 @@ namespace Dennoko.UVTools
         private static string LogPath => Path.Combine(LogDir, "MaskMaker.log");
 
         // ─────────────────────────────────────────────────────────────────────
-        [MenuItem("Tools/MaskMaker")]
+        [MenuItem("dennokoworks/MaskMaker")]
         public static void ShowWindow()
         {
             var wnd = GetWindow<UVMaskMakerWindow>();
