@@ -145,7 +145,6 @@
     "tool_clear": "Clear Paint",
     "tool_clear_confirm": "Clear all hand-painted data?",
     "mask_import_title": "Import Mask Image",
-    "mask_import_drop_hint": "Drag a mask image here",
     "mask_import_image": "Image",
     "mask_import_image_tooltip": "Specify an existing mask image to import.",
     "mask_import_clear_tooltip": "Clear the import image.",

@@ -37,13 +37,6 @@ namespace Dennoko.UVTools.UI
         {
             EditorUIStyles.BeginCard(_localization.Get("mask_import_title", "マスク画像の読み込み"));
 
-            // Drag-and-drop area
-            var dropRect = GUILayoutUtility.GetRect(0, 36, GUILayout.ExpandWidth(true));
-            GUI.Box(dropRect, _localization.Get("mask_import_drop_hint", "マスク画像をここへドラッグ"), EditorStyles.helpBox);
-            HandleDragAndDrop(dropRect);
-
-            EditorGUILayout.Space(4);
-
             // Texture object field + Clear button
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -99,43 +92,6 @@ namespace Dennoko.UVTools.UI
             GUI.enabled = true;
 
             EditorUIStyles.EndCard();
-        }
-
-        private void HandleDragAndDrop(Rect dropRect)
-        {
-            var evt = Event.current;
-            if (!dropRect.Contains(evt.mousePosition)) return;
-
-            if (evt.type == EventType.DragUpdated || evt.type == EventType.DragPerform)
-            {
-                // Accept only if at least one dragged object is a Texture2D
-                bool hasTexture = false;
-                foreach (var obj in DragAndDrop.objectReferences)
-                {
-                    if (obj is Texture2D)
-                    {
-                        hasTexture = true;
-                        break;
-                    }
-                }
-
-                if (!hasTexture) return;
-
-                DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
-                if (evt.type == EventType.DragPerform)
-                {
-                    DragAndDrop.AcceptDrag();
-                    foreach (var obj in DragAndDrop.objectReferences)
-                    {
-                        if (obj is Texture2D tex)
-                        {
-                            _importTex = tex;
-                            break;
-                        }
-                    }
-                }
-                evt.Use();
-            }
         }
     }
 }

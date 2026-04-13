@@ -56,7 +56,7 @@ This document explains how to use **MaskMaker** (`Tools > MaskMaker`). It is a t
 Loads an existing mask image and treats its black pixels as hand-painted areas.
 This allows you to resume editing from a previously exported mask PNG instead of starting from scratch.
 
-- **Image / Drop Area**: Drag and drop a `Texture2D` asset from the Project window, or select it with the Object field.
+- **Image / Drop Area**: Drag and drop a `Texture2D` asset from the Project window onto the Object field, or select it with the picker.
 - **Black Threshold (0–255)**: Pixels whose luminance is below this value are treated as "painted" (black). Default is `128`.
   - **Lower values** (e.g., 32): Only very dark pixels are imported — useful when the mask has slight gray fringing.
   - **Higher values** (e.g., 200): Darker-gray pixels are also imported — useful when you want to capture semi-transparent or anti-aliased edges.
