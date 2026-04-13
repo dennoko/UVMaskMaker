@@ -7,6 +7,7 @@ This document explains how to use **MaskMaker** (`Tools > MaskMaker`). It is a t
 ## Key Features
 - **UV Island Selection**: Select directly by clicking the mesh in the Scene View or the Preview area.
 - **Hand-painting**: Use the brush tool on the preview to freely paint masks. Can be combined with island selection for merged output.
+- **Mask Image Import**: Load an existing mask image and use its black regions as hand-painted areas, allowing you to resume editing from a previously exported mask.
 - **Automatic UV Analysis**: UV layout is automatically analyzed when the target is set, allowing you to start working immediately.
 - **Work Copy Function**: Automatically creates a static working copy to prevent misalignment due to mesh deformation.
 - **Flexible Export**: Supports channel-specific writing (RGBA) and baking to vertex colors.
@@ -22,17 +23,21 @@ This document explains how to use **MaskMaker** (`Tools > MaskMaker`). It is a t
 3. Select the **Target Material** (if extracting from a specific submesh) and **UV Channel** (usually UV0).
    - *Note: UV analysis is executed automatically when the target is set.*
    - *Note: A working copy (`[WorkCopy]`) is created by default.*
+4. *(Optional)* To start from an existing mask, drag and drop the mask image PNG into the `Import Mask Image` card and click **Load Mask**. See [Import Mask Image](#15-import-mask-image) for details.
 
 ### STEP 2: Island Selection & Painting
 1. Click the mesh in the Scene View or the `PREVIEW` area at the top of the window to select islands.
 2. Toggle between **Add** mode (add to selection) and **Remove** mode (deselect).
    - You can quickly switch modes with a hotkey (default `R`).
 3. Use the `Invert`, `Select All`, and `Clear` buttons for batch operations.
-4. **Paint Mode**: Select "Paint" in the toolbar below the preview to directly paint masks by left-click + drag.
-   - **Brush Size**: Adjust brush size with the slider (1–100px).
-   - **Eraser**: Toggle eraser mode to remove painted areas (island selections are not affected).
-   - **Undo / Redo**: Undo/Redo for paint strokes only.
-   - **Clear Paint**: Clears all hand-painted data.
+4. **Paint Mode**: Select "Paint" in the toolbar below the preview to directly paint masks using various tools.
+   - **Tool Types**:
+     - **Brush**: Freehand drawing.
+     - **Rect**: Fills a rectangular area.
+     - **Lasso**: Fills a hand-drawn enclosed area.
+     - **Eraser**: Removes painted areas like a brush (island selection is not affected).
+   - **Brush Size**: Adjusts thickness for Brush and Eraser tools (1–100px).
+   - **Undo / Redo / Clear**: Manage paint history or clear all hand-painted data.
 
 ### STEP 3: Export
 1. Confirm the resolution, invert mask option, and pixel margin in the `Quick Export` section.
@@ -49,6 +54,20 @@ This document explains how to use **MaskMaker** (`Tools > MaskMaker`). It is a t
 - **Create Work Copy / Remove Copy & Return**:
   - Creates a duplicate unaffected by mesh deformation (e.g., Modular Avatar).
   - Clicking "Remove Copy & Return" restores the session to the original focus.
+
+### 1.5. Import Mask Image
+Loads an existing mask image and treats its black pixels as hand-painted areas.
+This allows you to resume editing from a previously exported mask PNG instead of starting from scratch.
+
+- **Image / Drop Area**: Drag and drop a `Texture2D` asset from the Project window onto the Object field, or select it with the picker.
+- **Black Threshold (0–255)**: Pixels whose luminance is below this value are treated as "painted" (black). Default is `128`.
+  - **Lower values** (e.g., 32): Only very dark pixels are imported — useful when the mask has slight gray fringing.
+  - **Higher values** (e.g., 200): Darker-gray pixels are also imported — useful when you want to capture semi-transparent or anti-aliased edges.
+- **Load Mask button**: Applies the black regions of the image to the current hand-paint layer.
+  - The import **merges** with existing paint data (OR semantics). Previously painted pixels are not erased.
+  - The operation is **undoable** via the `Undo` button in the preview toolbar.
+
+> **Tips**: After loading, switch to Paint mode to fine-tune the imported areas with the brush or eraser.
 
 ### 2. Island Selection
 - **Add / Remove**: Switches the basic behavior upon clicking.
@@ -68,9 +87,11 @@ This document explains how to use **MaskMaker** (`Tools > MaskMaker`). It is a t
 In addition to island-based selection, you can draw freely on a pixel-by-pixel basis.
 
 - **Switching Modes**: Select "Paint" in the toolbar below the preview to enter drawing mode (Switching back to "Select" will return to island selection).
-- **Drawing and Erasing**: 
-  - **Left Drag**: Paints the mask.
-  - **Eraser**: When ON, your strokes will remove (unselect) the painted area.
+- **Drawing Tools (Toolbar)**: 
+  - **Brush**: Draws freehand lines.
+  - **Rect**: Fills a rectangular region.
+  - **Lasso**: Fills an enclosed area of any shape.
+  - **Eraser**: Removes painted areas.
 - **Undo / Redo**: 
   - Each paint stroke can be individually reversed using `Undo` / `Redo`.
   - *Note: This is managed as a separate history from island selection changes.*

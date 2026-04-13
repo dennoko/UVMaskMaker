@@ -142,6 +142,15 @@
     "tool_eraser": "消しゴム",
     "tool_undo": "戻す",
     "tool_redo": "やり直す",
-    "tool_clear": "塗りをクリア",
-    "tool_clear_confirm": "手塗りのデータをすべて消去しますか？"
+    "tool_clear": "クリア",
+    "tool_clear_confirm": "手塗りのデータをすべて消去しますか？",
+    "mask_import_title": "マスク画像の読み込み",
+    "mask_import_image": "画像",
+    "mask_import_image_tooltip": "読み込む既存のマスク画像を指定します。",
+    "mask_import_clear_tooltip": "読み込み画像をクリアします。",
+    "mask_import_threshold": "黒の閾値",
+    "mask_import_threshold_tooltip": "この値より暗いピクセルを手塗り領域として扱います（0-255）。",
+    "mask_import_load": "マスクを読み込む",
+    "mask_import_load_tooltip": "指定した画像の黒い部分を手塗り領域として読み込みます。",
+    "mask_import_done": "マスク画像を読み込みました"
 }

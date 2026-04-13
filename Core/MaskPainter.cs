@@ -177,6 +177,90 @@ namespace Dennoko.UVTools.Core
             PaintCircle(cx, cy, brushRadius, erase);
         }
 
+        /// <summary>
+        /// Fills a rectangle defined by two UV corners.
+        /// </summary>
+        public void PaintRect(Vector2 uvStart, Vector2 uvEnd, bool erase)
+        {
+            int x0 = Mathf.Clamp(Mathf.FloorToInt(Mathf.Min(uvStart.x, uvEnd.x) * _width),  0, _width  - 1);
+            int y0 = Mathf.Clamp(Mathf.FloorToInt(Mathf.Min(uvStart.y, uvEnd.y) * _height), 0, _height - 1);
+            int x1 = Mathf.Clamp(Mathf.FloorToInt(Mathf.Max(uvStart.x, uvEnd.x) * _width),  0, _width  - 1);
+            int y1 = Mathf.Clamp(Mathf.FloorToInt(Mathf.Max(uvStart.y, uvEnd.y) * _height), 0, _height - 1);
+
+            if (x0 > x1 || y0 > y1) return;
+
+            byte val = erase ? (byte)0 : (byte)255;
+
+            int tMinX = Mathf.Clamp(x0 * TileGridDim / _width,  0, TileGridDim - 1);
+            int tMaxX = Mathf.Clamp(x1 * TileGridDim / _width,  0, TileGridDim - 1);
+            int tMinY = Mathf.Clamp(y0 * TileGridDim / _height, 0, TileGridDim - 1);
+            int tMaxY = Mathf.Clamp(y1 * TileGridDim / _height, 0, TileGridDim - 1);
+            for (int ty = tMinY; ty <= tMaxY; ty++)
+                for (int tx = tMinX; tx <= tMaxX; tx++)
+                    _dirtyTiles[ty * TileGridDim + tx] = true;
+
+            for (int y = y0; y <= y1; y++)
+                for (int x = x0; x <= x1; x++)
+                    _paintMask[y * _width + x] = val;
+        }
+
+        /// <summary>
+        /// Fills the interior of a polygon defined by UV points using a scanline algorithm.
+        /// The polygon is automatically closed (last point connects back to first).
+        /// </summary>
+        public void PaintPolygon(List<Vector2> uvPoints, bool erase)
+        {
+            if (uvPoints == null || uvPoints.Count < 3) return;
+
+            int n = uvPoints.Count;
+            int[] px = new int[n];
+            int[] py = new int[n];
+            int minY = int.MaxValue, maxY = int.MinValue;
+
+            for (int i = 0; i < n; i++)
+            {
+                px[i] = Mathf.Clamp(Mathf.FloorToInt(uvPoints[i].x * _width),  0, _width  - 1);
+                py[i] = Mathf.Clamp(Mathf.FloorToInt(uvPoints[i].y * _height), 0, _height - 1);
+                if (py[i] < minY) minY = py[i];
+                if (py[i] > maxY) maxY = py[i];
+            }
+
+            byte val = erase ? (byte)0 : (byte)255;
+            var intersections = new List<int>();
+
+            for (int y = minY; y <= maxY; y++)
+            {
+                intersections.Clear();
+                for (int i = 0; i < n; i++)
+                {
+                    int j = (i + 1) % n;
+                    int ay = py[i], by = py[j];
+                    if ((ay <= y && y < by) || (by <= y && y < ay))
+                    {
+                        float t = (float)(y - ay) / (by - ay);
+                        int x = Mathf.RoundToInt(px[i] + t * (px[j] - px[i]));
+                        intersections.Add(x);
+                    }
+                }
+                intersections.Sort();
+
+                for (int i = 0; i + 1 < intersections.Count; i += 2)
+                {
+                    int xStart = Mathf.Clamp(intersections[i],     0, _width - 1);
+                    int xEnd   = Mathf.Clamp(intersections[i + 1], 0, _width - 1);
+
+                    int tMinX = Mathf.Clamp(xStart * TileGridDim / _width, 0, TileGridDim - 1);
+                    int tMaxX = Mathf.Clamp(xEnd   * TileGridDim / _width, 0, TileGridDim - 1);
+                    int ty    = Mathf.Clamp(y * TileGridDim / _height,     0, TileGridDim - 1);
+                    for (int tx = tMinX; tx <= tMaxX; tx++)
+                        _dirtyTiles[ty * TileGridDim + tx] = true;
+
+                    for (int x = xStart; x <= xEnd; x++)
+                        _paintMask[y * _width + x] = val;
+                }
+            }
+        }
+
         private void PaintCircle(int cx, int cy, int r, bool erase)
         {
             byte val = erase ? (byte)0 : (byte)255;

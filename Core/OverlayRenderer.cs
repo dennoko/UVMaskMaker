@@ -8,7 +8,14 @@ using Dennoko.UVTools.Data;
 namespace Dennoko.UVTools.Core
 {
     /// <summary>
-    /// Renders UV seams and selected island overlays in the SceneView.
+    /// Renders UV seams and mask overlay in the SceneView.
+    ///
+    /// Seam rendering uses Unity's Handles API (line drawing).
+    /// Mask overlay rendering uses GL immediate mode with a transparent
+    /// UV-sampled shader (Hidden/UVMaskMaker/MaskOverlay) that blends the
+    /// mask preview texture — including hand-painted regions — onto the 3D mesh
+    /// surface via screen-space compositing (Blend SrcAlpha OneMinusSrcAlpha).
+    ///
     /// Caches world-space geometry for performance.
     /// </summary>
     public class OverlayRenderer
@@ -19,6 +26,9 @@ namespace Dennoko.UVTools.Core
         private Matrix4x4 _lastLocalToWorld;
         private bool _cacheValid = false;
 
+        // Material used for the mask overlay (created once, reused across repaints)
+        private static Material _maskOverlayMat;
+
         /// <summary>
         /// Invalidates the cached overlay geometry.
         /// Call when mesh or transform changes.
@@ -26,6 +36,126 @@ namespace Dennoko.UVTools.Core
         public void InvalidateCache()
         {
             _cacheValid = false;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Mask overlay (texture-based, replaces island wireframes)
+        // ─────────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Projects the overlay texture onto the mesh surface in the scene view
+        /// using GL immediate mode and the MaskOverlay shader.
+        ///
+        /// The overlay texture encodes both island selection and hand-painted
+        /// regions:  selected / painted pixels carry the selection colour with
+        /// an alpha value; unselected pixels are fully transparent, leaving the
+        /// mesh surface unchanged.
+        ///
+        /// This replaces the previous wireframe DrawSelectedIslands approach so
+        /// that filled shape and paint strokes are visible directly on the object.
+        /// </summary>
+        /// <param name="analysis">UV analysis containing all mesh triangles</param>
+        /// <param name="transform">Target object transform</param>
+        /// <param name="settings">Current mask settings (ZTest, depth offset)</param>
+        /// <param name="overlayTexture">
+        ///   Semi-transparent overlay texture from UVPreviewDrawer.OverlayTexture.
+        ///   Must not be null.
+        /// </param>
+        /// <param name="bakedMesh">Optional baked mesh for SkinnedMeshRenderer</param>
+        /// <param name="useBakedMesh">Whether to use baked mesh positions</param>
+        public void DrawMaskOverlay(
+            UVAnalysis analysis,
+            Transform transform,
+            MaskSettings settings,
+            Texture2D overlayTexture,
+            Mesh bakedMesh = null,
+            bool useBakedMesh = false)
+        {
+            if (analysis == null || transform == null || overlayTexture == null) return;
+            if (Event.current.type != EventType.Repaint) return;
+
+            EnsureWorldCache(analysis, transform, bakedMesh, useBakedMesh);
+            if (_worldPosBase == null || _worldNormal == null) return;
+
+            var mat = GetOrCreateOverlayMaterial();
+            if (mat == null) return;
+
+            mat.mainTexture = overlayTexture;
+            mat.SetInt("_ZTest", (int)(settings.OverlayOnTop
+                ? UnityEngine.Rendering.CompareFunction.Always
+                : UnityEngine.Rendering.CompareFunction.LessEqual));
+
+            if (!mat.SetPass(0)) return;
+
+            float depthOffset = settings.OverlayDepthOffset;
+            var cam = Camera.current;
+
+            GL.PushMatrix();
+            if (cam != null)
+            {
+                // Explicitly set up the view/projection matrices from the scene camera
+                // so world-space vertices passed to GL.Vertex() are correctly projected
+                // to clip space regardless of any prior GL matrix state.
+                GL.LoadProjectionMatrix(cam.projectionMatrix);
+                GL.modelview = cam.worldToCameraMatrix;
+            }
+            else
+            {
+                // Fallback: ensure the model part is identity so that world-space
+                // vertices are not double-transformed.
+                GL.MultMatrix(Matrix4x4.identity);
+            }
+            GL.Begin(GL.TRIANGLES);
+
+            int posLen = _worldPosBase.Length;
+            foreach (var tri in analysis.Triangles)
+            {
+                // Guard against vertex-count mismatch that can occur when the baked
+                // mesh (SkinnedMeshRenderer) is temporarily out of sync with the analysis.
+                // The check is intentionally lightweight (unsigned comparison) to keep the
+                // hot loop fast on typical meshes.
+                if ((uint)tri.v0 >= (uint)posLen ||
+                    (uint)tri.v1 >= (uint)posLen ||
+                    (uint)tri.v2 >= (uint)posLen) continue;
+
+                var a = _worldPosBase[tri.v0] + _worldNormal[tri.v0] * depthOffset;
+                var b = _worldPosBase[tri.v1] + _worldNormal[tri.v1] * depthOffset;
+                var c = _worldPosBase[tri.v2] + _worldNormal[tri.v2] * depthOffset;
+
+                GL.TexCoord2(tri.uv0.x, tri.uv0.y); GL.Vertex(a);
+                GL.TexCoord2(tri.uv1.x, tri.uv1.y); GL.Vertex(b);
+                GL.TexCoord2(tri.uv2.x, tri.uv2.y); GL.Vertex(c);
+            }
+
+            GL.End();
+            GL.PopMatrix();
+        }
+
+        /// <summary>
+        /// Returns (and lazily creates) the shared material for the mask overlay.
+        /// Tries to load the custom Hidden/UVMaskMaker/MaskOverlay shader first;
+        /// falls back to Unlit/Transparent so the tool degrades gracefully if the
+        /// shader file has not been compiled yet (e.g., fresh project import).
+        /// </summary>
+        private static Material GetOrCreateOverlayMaterial()
+        {
+            if (_maskOverlayMat != null) return _maskOverlayMat;
+
+            var shader = Shader.Find("Hidden/UVMaskMaker/MaskOverlay");
+            if (shader == null)
+                shader = Shader.Find("Unlit/Transparent");
+            if (shader == null)
+            {
+                Debug.LogWarning("[OverlayRenderer] Could not find the 'Hidden/UVMaskMaker/MaskOverlay' shader " +
+                                 "or its built-in fallback 'Unlit/Transparent'. " +
+                                 "Please ensure MaskOverlay.shader is present in the project and has compiled " +
+                                 "without errors (check the Console for shader compilation messages). " +
+                                 "The mask overlay will not be rendered in the scene view until the shader is available.");
+                return null;
+            }
+
+            _maskOverlayMat = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
+            return _maskOverlayMat;
         }
 
         /// <summary>
