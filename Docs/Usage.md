@@ -7,6 +7,7 @@ This document explains how to use **MaskMaker** (`Tools > MaskMaker`). It is a t
 ## Key Features
 - **UV Island Selection**: Select directly by clicking the mesh in the Scene View or the Preview area.
 - **Hand-painting**: Use the brush tool on the preview to freely paint masks. Can be combined with island selection for merged output.
+- **Mask Image Import**: Load an existing mask image and use its black regions as hand-painted areas, allowing you to resume editing from a previously exported mask.
 - **Automatic UV Analysis**: UV layout is automatically analyzed when the target is set, allowing you to start working immediately.
 - **Work Copy Function**: Automatically creates a static working copy to prevent misalignment due to mesh deformation.
 - **Flexible Export**: Supports channel-specific writing (RGBA) and baking to vertex colors.
@@ -22,6 +23,7 @@ This document explains how to use **MaskMaker** (`Tools > MaskMaker`). It is a t
 3. Select the **Target Material** (if extracting from a specific submesh) and **UV Channel** (usually UV0).
    - *Note: UV analysis is executed automatically when the target is set.*
    - *Note: A working copy (`[WorkCopy]`) is created by default.*
+4. *(Optional)* To start from an existing mask, drag and drop the mask image PNG into the `Import Mask Image` card and click **Load Mask**. See [Import Mask Image](#15-import-mask-image) for details.
 
 ### STEP 2: Island Selection & Painting
 1. Click the mesh in the Scene View or the `PREVIEW` area at the top of the window to select islands.
@@ -52,6 +54,20 @@ This document explains how to use **MaskMaker** (`Tools > MaskMaker`). It is a t
 - **Create Work Copy / Remove Copy & Return**:
   - Creates a duplicate unaffected by mesh deformation (e.g., Modular Avatar).
   - Clicking "Remove Copy & Return" restores the session to the original focus.
+
+### 1.5. Import Mask Image
+Loads an existing mask image and treats its black pixels as hand-painted areas.
+This allows you to resume editing from a previously exported mask PNG instead of starting from scratch.
+
+- **Image / Drop Area**: Drag and drop a `Texture2D` asset from the Project window onto the Object field, or select it with the picker.
+- **Black Threshold (0–255)**: Pixels whose luminance is below this value are treated as "painted" (black). Default is `128`.
+  - **Lower values** (e.g., 32): Only very dark pixels are imported — useful when the mask has slight gray fringing.
+  - **Higher values** (e.g., 200): Darker-gray pixels are also imported — useful when you want to capture semi-transparent or anti-aliased edges.
+- **Load Mask button**: Applies the black regions of the image to the current hand-paint layer.
+  - The import **merges** with existing paint data (OR semantics). Previously painted pixels are not erased.
+  - The operation is **undoable** via the `Undo` button in the preview toolbar.
+
+> **Tips**: After loading, switch to Paint mode to fine-tune the imported areas with the brush or eraser.
 
 ### 2. Island Selection
 - **Add / Remove**: Switches the basic behavior upon clicking.
