@@ -257,12 +257,15 @@ namespace Dennoko.UVTools
         /// <summary>
         /// Called every editor frame. Forces continuous repainting during active paint strokes
         /// so the preview texture updates in real-time rather than on mouse release.
+        /// Also repaints the scene view so hand-painted regions are immediately visible
+        /// on the 3D mesh via the mask overlay renderer.
         /// </summary>
         private void EditorUpdate()
         {
             if (_previewDrawer != null && _previewDrawer.IsPainting)
             {
                 Repaint();
+                SceneView.RepaintAll();
             }
         }
 
@@ -414,11 +417,11 @@ namespace Dennoko.UVTools
             {
                 GUILayout.Space(4);
 
-                // Tool Mode Toggle
+                // ── Select / Paint mode toggle ──────────────────────────────────
                 int toolMode = _settings.IsPaintMode ? 1 : 0;
                 GUIContent[] modes = new GUIContent[] {
                     new GUIContent(_localization.Get("tool_select", "Select")),
-                    new GUIContent(_localization.Get("tool_paint", "Paint"))
+                    new GUIContent(_localization.Get("tool_paint",  "Paint"))
                 };
                 int newMode = GUILayout.Toolbar(toolMode, modes, GUILayout.Width(120));
                 if (newMode != toolMode)
@@ -427,37 +430,42 @@ namespace Dennoko.UVTools
                     _settingsManager.Save(_settings);
                 }
 
-                GUILayout.Space(10);
-                
+                GUILayout.Space(6);
+
                 EditorGUI.BeginDisabledGroup(!_settings.IsPaintMode);
 
-                // Brush Size
-                GUILayout.Label(_localization.Get("brush_size", "Size"), GUILayout.Width(35));
+                // ── Paint sub-mode (Brush / Rect / Lasso / Eraser) ─────────────
+                int subMode = (int)_settings.PaintSubMode;
+                GUIContent[] subModes = new GUIContent[] {
+                    new GUIContent(_localization.Get("tool_brush",  "Brush")),
+                    new GUIContent(_localization.Get("tool_rect",   "Rect")),
+                    new GUIContent(_localization.Get("tool_lasso",  "Lasso")),
+                    new GUIContent(_localization.Get("tool_eraser", "Eraser"))
+                };
+                int newSubMode = GUILayout.Toolbar(subMode, subModes, GUILayout.Width(200));
+                if (newSubMode != subMode)
+                {
+                    _settings.PaintSubMode = (PaintSubMode)newSubMode;
+                    _settingsManager.Save(_settings);
+                }
+
+                GUILayout.Space(6);
+
+                // ── Brush size (Brush / Eraser のみ有効) ───────────────────────
+                bool usesSize = _settings.PaintSubMode == PaintSubMode.Brush
+                             || _settings.PaintSubMode == PaintSubMode.Eraser;
+                EditorGUI.BeginDisabledGroup(!usesSize);
+                GUILayout.Label(_localization.Get("brush_size", "Size"), GUILayout.Width(38));
                 int newSize = (int)GUILayout.HorizontalSlider(_settings.BrushSize, 1, 100, GUILayout.Width(80));
                 if (newSize != _settings.BrushSize)
                 {
                     _settings.BrushSize = newSize;
                     _settingsManager.Save(_settings);
                 }
-
-                GUILayout.Space(10);
-
-                // Eraser Toggle
-                var oldBg = GUI.backgroundColor;
-                if (_settings.EraseMode) GUI.backgroundColor = EditorUIStyles.AccentBlue;
-
-                bool newEraser = GUILayout.Toggle(_settings.EraseMode, _localization.Get("tool_eraser", "Eraser"), EditorStyles.toolbarButton, GUILayout.Width(60));
-                
-                GUI.backgroundColor = oldBg;
-
-                if (newEraser != _settings.EraseMode)
-                {
-                    _settings.EraseMode = newEraser;
-                    _settingsManager.Save(_settings);
-                }
-                
                 EditorGUI.EndDisabledGroup();
-                
+
+                EditorGUI.EndDisabledGroup();
+
                 GUILayout.FlexibleSpace();
                 GUILayout.Space(4);
             }
@@ -1138,7 +1146,18 @@ namespace Dennoko.UVTools
             if (_analysis != null && _targetTransform != null)
             {
                 _overlayRenderer.DrawSeams(_analysis, _targetTransform, _settings, _bakedMesh, _settings.UseBakedMesh);
-                _overlayRenderer.DrawSelectedIslands(_analysis, _selectedIslands, _targetTransform, _settings, _targetRenderer, sv, _bakedMesh, _settings.UseBakedMesh);
+
+                // Replace wireframe island overlay with texture-based mask overlay.
+                // The overlay texture encodes both island selection and hand-painted regions,
+                // so the scene view always reflects the current state of the preview —
+                // including strokes from the hand-drawing tool.
+                var overlayTex = _previewDrawer.OverlayTexture;
+                if (overlayTex != null)
+                {
+                    _overlayRenderer.DrawMaskOverlay(
+                        _analysis, _targetTransform, _settings, overlayTex,
+                        _bakedMesh, _settings.UseBakedMesh);
+                }
             }
 
             if (_analysis != null && e.type == EventType.MouseDown && e.button == 0)

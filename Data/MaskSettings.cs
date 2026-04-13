@@ -4,6 +4,11 @@ using UnityEngine;
 namespace Dennoko.UVTools.Data
 {
     /// <summary>
+    /// Paint sub-mode for the paint tool.
+    /// </summary>
+    public enum PaintSubMode { Brush = 0, Rect = 1, Lasso = 2, Eraser = 3 }
+
+    /// <summary>
     /// Holds all configurable settings for the UV Mask Maker tool.
     /// This is a pure data class (POCO) with no behavior.
     /// </summary>
@@ -29,8 +34,8 @@ namespace Dennoko.UVTools.Data
         // Mode settings
         public bool AddMode = true;
         public bool IsPaintMode = false;
+        public PaintSubMode PaintSubMode = PaintSubMode.Brush;
         public int BrushSize = 50;
-        public bool EraseMode = false;
         public KeyCode ModeToggleHotkey = KeyCode.R;
 
         // UV settings
