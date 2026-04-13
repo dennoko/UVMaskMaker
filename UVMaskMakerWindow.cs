@@ -450,7 +450,7 @@ namespace Dennoko.UVTools
                 bool usesSize = _settings.PaintSubMode == PaintSubMode.Brush
                              || _settings.PaintSubMode == PaintSubMode.Eraser;
                 EditorGUI.BeginDisabledGroup(!usesSize);
-                GUILayout.Label(_localization.Get("brush_size", "Size"), GUILayout.Width(30));
+                GUILayout.Label(_localization.Get("brush_size", "Size"), GUILayout.Width(38));
                 int newSize = (int)GUILayout.HorizontalSlider(_settings.BrushSize, 1, 100, GUILayout.Width(80));
                 if (newSize != _settings.BrushSize)
                 {
