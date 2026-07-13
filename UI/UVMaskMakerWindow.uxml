@@ -1,9 +1,12 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements"
          xmlns:dk="Dennoko.UVTools.UI">
 
-    <!-- ヘッダー -->
     <ui:VisualElement class="dennoko-header">
-        <ui:Label text="MASK MAKER" class="dennoko-title" />
+        <ui:VisualElement class="dennoko-header-titlegroup">
+            <ui:Label text="MASK MAKER" class="dennoko-title" />
+            <ui:Label name="version-label" text="" class="dennoko-version-label" />
+            <ui:Button name="version-reload-button" text="↻" class="dennoko-version-reload-button" />
+        </ui:VisualElement>
     </ui:VisualElement>
     <ui:VisualElement class="dennoko-separator" />
 

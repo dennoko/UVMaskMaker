@@ -67,6 +67,12 @@ namespace Dennoko.UVTools
         private Label _statusLabel;
         private IVisualElementScheduledItem _statusResetSchedule;
 
+        // ── UI: version info ────────────────────────────────────────────────
+        private Label _versionLabel;
+        private Button _versionReloadBtn;
+        private DennokoVersionChecker.Result _versionResult =
+            new DennokoVersionChecker.Result { State = DennokoVersionChecker.State.Checking, LocalVersion = "0.0.0" };
+
         // ── Section binders ──────────────────────────────────────────────────
         private TargetSectionBinder   _targetBinder;
         private MaskImportBinder      _maskImportBinder;
@@ -455,6 +461,19 @@ namespace Dennoko.UVTools
             RefreshModeUI();
             RefreshPaintToolbar();
             UpdateZoomLabel();
+
+            // ── Version Info ────────────────────────────────────────────────
+            _versionLabel = root.Q<Label>("version-label");
+            _versionReloadBtn = root.Q<Button>("version-reload-button");
+            if (_versionReloadBtn != null)
+            {
+                _versionReloadBtn.clicked += () =>
+                {
+                    MaskMakerVersion.ForceRecheck();
+                    LoadVersionResultFromSessionState();
+                };
+            }
+            StartVersionCheck();
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -505,6 +524,12 @@ namespace Dennoko.UVTools
             {
                 _statusLabel.text = _localization.Get("status_ready", "Ready");
             }
+
+            if (_versionReloadBtn != null)
+            {
+                _versionReloadBtn.tooltip = _localization.Get("version_reload_tooltip", "アップデートを再確認");
+            }
+            ApplyVersionLabel();
         }
 
         /// <summary>Refreshes everything that depends on the current target / analysis.</summary>
@@ -1150,6 +1175,72 @@ namespace Dennoko.UVTools
                 }
                 e.Use();
             }
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // ─── バージョン管理・アップデートチェック ───────────────────────
+        private void StartVersionCheck()
+        {
+            LoadVersionResultFromSessionState();
+            MaskMakerVersion.StartCheckBackgroundTask();
+        }
+
+        internal void LoadVersionResultFromSessionState()
+        {
+            string local  = MaskMakerVersion.Current;
+            string latest = SessionState.GetString(MaskMakerVersion.VerCheckLatestKey, string.Empty);
+            bool   done   = SessionState.GetBool(MaskMakerVersion.VerCheckDoneKey, false);
+            bool   error  = SessionState.GetBool(MaskMakerVersion.VerCheckErrorKey, false);
+
+            DennokoVersionChecker.State state;
+            if (!done)
+                state = DennokoVersionChecker.State.Checking;
+            else if (error || string.IsNullOrEmpty(latest))
+                state = DennokoVersionChecker.State.Error;
+            else if (DennokoVersionChecker.IsUpdateAvailable(latest, local))
+                state = DennokoVersionChecker.State.UpdateAvailable;
+            else
+                state = DennokoVersionChecker.State.UpToDate;
+
+            _versionResult = new DennokoVersionChecker.Result
+            {
+                State = state,
+                LocalVersion = local,
+                LatestVersion = latest,
+                Url = SessionState.GetString(MaskMakerVersion.VerCheckUrlKey, string.Empty),
+                Message = SessionState.GetString(MaskMakerVersion.VerCheckMessageKey, string.Empty)
+            };
+            ApplyVersionLabel();
+        }
+
+        private void ApplyVersionLabel()
+        {
+            if (_versionLabel == null) return;
+
+            var r = _versionResult;
+            string baseText = "v" + r.LocalVersion;
+            string text;
+            bool update = false, error = false;
+            switch (r.State)
+            {
+                case DennokoVersionChecker.State.UpdateAvailable:
+                    text = baseText + "  " + string.Format(_localization.Get("version_update_available", "更新あり {0}"), r.LatestVersion);
+                    update = true;
+                    break;
+                case DennokoVersionChecker.State.Error:
+                    text = baseText + "  " + _localization.Get("version_error", "最新版を取得できません");
+                    error = true;
+                    break;
+                case DennokoVersionChecker.State.Checking:
+                    text = baseText + "  " + _localization.Get("version_checking", "確認中...");
+                    break;
+                default: // UpToDate
+                    text = baseText;
+                    break;
+            }
+            _versionLabel.text = text;
+            _versionLabel.EnableInClassList("dennoko-version-label--update", update);
+            _versionLabel.EnableInClassList("dennoko-version-label--error", error);
         }
 
         // ─────────────────────────────────────────────────────────────────────

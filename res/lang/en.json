@@ -152,5 +152,9 @@
     "mask_import_threshold_tooltip": "Pixels darker than this value (0-255) are treated as painted areas.",
     "mask_import_load": "Load Mask",
     "mask_import_load_tooltip": "Load black regions of the specified image as hand-painted areas.",
-    "mask_import_done": "Mask image loaded successfully"
+    "mask_import_done": "Mask image loaded successfully",
+    "version_reload_tooltip": "Recheck update",
+    "version_update_available": "Update available {0}",
+    "version_error": "Failed to get latest version",
+    "version_checking": "Checking..."
 }

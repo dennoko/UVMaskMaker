@@ -152,5 +152,9 @@
     "mask_import_threshold_tooltip": "この値より暗いピクセルを手塗り領域として扱います（0-255）。",
     "mask_import_load": "マスクを読み込む",
     "mask_import_load_tooltip": "指定した画像の黒い部分を手塗り領域として読み込みます。",
-    "mask_import_done": "マスク画像を読み込みました"
+    "mask_import_done": "マスク画像を読み込みました",
+    "version_reload_tooltip": "アップデートを再確認",
+    "version_update_available": "更新あり {0}",
+    "version_error": "最新版を取得できません",
+    "version_checking": "確認中..."
 }
