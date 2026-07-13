@@ -1,0 +1,204 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements"
+         xmlns:dk="Dennoko.UVTools.UI">
+
+    <!-- ヘッダー -->
+    <ui:VisualElement class="dennoko-header">
+        <ui:Label text="MASK MAKER" class="dennoko-title" />
+    </ui:VisualElement>
+    <ui:VisualElement class="dennoko-separator" />
+
+    <!-- 上: プレビュー / 下: 設定 のリサイズ可能スプリット -->
+    <ui:TwoPaneSplitView orientation="Vertical" fixed-pane-index="0" fixed-pane-initial-dimension="280">
+
+        <!-- ══ Zone 1: プレビュー ══════════════════════════════════ -->
+        <ui:VisualElement name="preview-zone" style="min-height: 80px;">
+
+            <!-- プレビューツールバー -->
+            <ui:VisualElement class="dennoko-toolbar maskmaker-preview-toolbar">
+                <ui:Label text="PREVIEW" class="dennoko-section-title" />
+                <ui:Button name="undo-btn" text="Undo" class="maskmaker-toolbar-btn" />
+                <ui:Button name="redo-btn" text="Redo" class="maskmaker-toolbar-btn" />
+                <ui:Button name="clear-paint-btn" text="Clear" class="maskmaker-toolbar-btn" />
+                <ui:VisualElement class="maskmaker-spacer" />
+                <ui:Label name="zoom-label" text="100%" class="maskmaker-zoom-label" />
+                <ui:Button name="reset-view-btn" text="Reset" class="maskmaker-toolbar-btn" />
+            </ui:VisualElement>
+
+            <!-- UV プレビュー (カスタム要素) -->
+            <dk:UVPreviewElement name="uv-preview" class="maskmaker-preview-viewport" />
+
+            <!-- ペイントフッター -->
+            <ui:VisualElement class="dennoko-toolbar maskmaker-preview-toolbar">
+                <ui:Button name="mode-select-btn" text="Select" class="maskmaker-toolbar-btn" />
+                <ui:Button name="mode-paint-btn" text="Paint" class="maskmaker-toolbar-btn" />
+                <ui:VisualElement name="paint-tools" class="maskmaker-row">
+                    <ui:Button name="sub-brush-btn" text="Brush" class="maskmaker-toolbar-btn" />
+                    <ui:Button name="sub-rect-btn" text="Rect" class="maskmaker-toolbar-btn" />
+                    <ui:Button name="sub-lasso-btn" text="Lasso" class="maskmaker-toolbar-btn" />
+                    <ui:Button name="sub-eraser-btn" text="Eraser" class="maskmaker-toolbar-btn" />
+                    <ui:Label name="brush-size-label" text="Size" class="dennoko-text-tertiary" />
+                    <ui:SliderInt name="brush-size-slider" low-value="1" high-value="100"
+                        class="maskmaker-brush-slider" />
+                </ui:VisualElement>
+                <ui:VisualElement class="maskmaker-spacer" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- ══ Zone 2: 設定 (スクロール) ═══════════════════════════ -->
+        <ui:VisualElement name="settings-zone" style="min-height: 50px;">
+            <ui:ScrollView class="dennoko-scroll">
+
+                <!-- STEP 1: Target -->
+                <ui:VisualElement name="target-card" class="dennoko-card">
+                    <ui:Label name="target-title" text="TARGET MODEL"
+                        class="dennoko-section-title dennoko-card-header" />
+                    <ui:Label name="target-drop-area" text="Drag &amp; Drop GameObject here"
+                        class="maskmaker-drop-area" />
+                    <ui:VisualElement class="maskmaker-row">
+                        <uie:ObjectField name="target-field" label="Object" allow-scene-objects="true"
+                            type="UnityEngine.GameObject, UnityEngine.CoreModule" class="maskmaker-grow" />
+                        <ui:Button name="target-clear-btn" text="Clear" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="skinned-options">
+                        <ui:Toggle name="baked-mesh-toggle" label="Use Baked Mesh" />
+                        <ui:Button name="setup-workcopy-btn" text="Setup Work Copy"
+                            class="dennoko-button-secondary" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="workcopy-options">
+                        <ui:HelpBox name="workcopy-info" message-type="Info"
+                            text="Work Copy Active. Original mesh is safe." />
+                        <ui:Button name="cleanup-workcopy-btn" text="Cleanup Work Copy"
+                            class="dennoko-button-secondary" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="mesh-options">
+                        <ui:VisualElement class="dennoko-separator" />
+                        <ui:DropdownField name="submesh-dropdown" label="Target Material" />
+                        <ui:DropdownField name="uv-channel-dropdown" label="UV Channel" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- マスク画像の読み込み -->
+                <ui:VisualElement name="import-card" class="dennoko-card">
+                    <ui:Label name="import-title" text="IMPORT MASK IMAGE"
+                        class="dennoko-section-title dennoko-card-header" />
+                    <ui:VisualElement class="maskmaker-row">
+                        <uie:ObjectField name="import-tex-field" label="Image"
+                            type="UnityEngine.Texture2D, UnityEngine.CoreModule" class="maskmaker-grow" />
+                        <ui:Button name="import-clear-btn" text="Clear" />
+                    </ui:VisualElement>
+                    <ui:SliderInt name="threshold-slider" label="Black Threshold"
+                        low-value="0" high-value="255" value="128" show-input-field="true" />
+                    <ui:Button name="import-load-btn" text="Load Mask" class="dennoko-button-secondary" />
+                </ui:VisualElement>
+
+                <!-- STEP 2: アイランド選択 -->
+                <ui:VisualElement name="selection-card" class="dennoko-card">
+                    <ui:Label name="selection-title" text="ISLAND SELECTION"
+                        class="dennoko-section-title dennoko-card-header" />
+                    <ui:VisualElement class="maskmaker-row" style="justify-content: center;">
+                        <ui:Button name="mode-add-btn" text="Add" style="width: 100px;" />
+                        <ui:Button name="mode-remove-btn" text="Remove" style="width: 100px;" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="maskmaker-row">
+                        <ui:Button name="invert-btn" text="Invert" class="maskmaker-grow" />
+                        <ui:Button name="select-all-btn" text="Select All" class="maskmaker-grow" />
+                        <ui:Button name="clear-selection-btn" text="Clear" class="maskmaker-grow" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+
+                <!-- シーンオーバーレイ (折りたたみ) -->
+                <ui:Foldout name="overlay-foldout" text="Scene Overlay" value="false"
+                    class="maskmaker-foldout">
+                    <ui:Toggle name="overlay-on-top-toggle" label="Overlay On Top" />
+                    <ui:Toggle name="disable-aa-toggle" label="Disable AA" />
+                    <ui:Toggle name="backface-cull-toggle" label="Backface Cull" />
+                    <ui:Slider name="thickness-slider" label="Thickness"
+                        low-value="1" high-value="8" show-input-field="true" />
+                    <ui:Slider name="depth-offset-slider" label="Depth Offset (mm)"
+                        low-value="0" high-value="20" show-input-field="true" />
+                    <ui:VisualElement class="dennoko-separator" />
+                    <uie:ColorField name="selected-color-field" label="Selected Color" />
+                    <uie:ColorField name="seam-color-field" label="Seam Color" />
+                    <uie:ColorField name="preview-fill-color-field" label="Preview Fill" />
+                    <ui:Slider name="overlay-alpha-slider" label="Overlay Alpha"
+                        low-value="0" high-value="1" show-input-field="true" />
+                    <ui:VisualElement class="dennoko-separator" />
+                    <ui:Toggle name="show-island-preview-toggle" label="Show Island Borders" />
+                    <ui:Toggle name="overlay-base-tex-toggle" label="Overlay Base Texture" />
+                </ui:Foldout>
+
+                <!-- チャンネル書き込み (折りたたみ) -->
+                <ui:Foldout name="channel-write-foldout" text="Channel Write" value="false"
+                    class="maskmaker-foldout">
+                    <ui:Toggle name="channel-write-toggle" label="Enable Channel Write" />
+                    <ui:VisualElement name="channel-write-content">
+                        <uie:ObjectField name="base-png-field" label="Base PNG"
+                            type="UnityEngine.Texture2D, UnityEngine.CoreModule" />
+                        <ui:VisualElement class="maskmaker-row">
+                            <ui:Label name="write-channels-label" text="Write Channels"
+                                style="min-width: 110px;" />
+                            <ui:Toggle name="write-r-toggle" label="R" class="maskmaker-channel-toggle" />
+                            <ui:Toggle name="write-g-toggle" label="G" class="maskmaker-channel-toggle" />
+                            <ui:Toggle name="write-b-toggle" label="B" class="maskmaker-channel-toggle" />
+                            <ui:Toggle name="write-a-toggle" label="A" class="maskmaker-channel-toggle" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:Foldout>
+
+                <!-- 頂点カラー焼き込み (折りたたみ) -->
+                <ui:Foldout name="vertex-color-foldout" text="Vertex Color Bake" value="false"
+                    class="maskmaker-foldout">
+                    <uie:ObjectField name="base-vc-mesh-field" label="Base VC Mesh"
+                        type="UnityEngine.Mesh, UnityEngine.CoreModule" />
+                    <ui:Toggle name="overwrite-vc-toggle" label="Overwrite Existing" />
+                    <ui:Button name="bake-vc-btn" text="Bake to Vertex Colors"
+                        class="dennoko-button-secondary" />
+                </ui:Foldout>
+
+                <!-- 環境設定 (折りたたみ) -->
+                <ui:Foldout name="preferences-foldout" text="Preferences" value="false"
+                    class="maskmaker-foldout">
+                    <ui:Toggle name="english-toggle" label="Enable English Mode" />
+                    <ui:TextField name="hotkey-field" label="Mode Toggle Hotkey" />
+                    <ui:Toggle name="auto-workcopy-toggle" label="Auto Work Copy" />
+                    <ui:Vector3Field name="workcopy-offset-field" label="Work Copy Offset" />
+                </ui:Foldout>
+
+            </ui:ScrollView>
+
+            <ui:VisualElement class="dennoko-separator" />
+
+            <!-- STEP 3: クイックエクスポート (固定表示フッター) -->
+            <ui:VisualElement name="export-card" class="dennoko-card dennoko-footer">
+                <ui:Label name="export-title" text="QUICK EXPORT"
+                    class="dennoko-section-title dennoko-card-header" />
+                <ui:VisualElement class="maskmaker-row">
+                    <ui:DropdownField name="resolution-dropdown" label="Resolution" />
+                    <ui:Toggle name="invert-mask-toggle" label="Invert Mask" />
+                </ui:VisualElement>
+                <ui:SliderInt name="pixel-margin-slider" label="Pixel Margin"
+                    low-value="0" high-value="16" show-input-field="true" />
+                <ui:Button name="save-png-btn" text="Save PNG" class="dennoko-button-primary" />
+
+                <!-- 出力設定 (折りたたみ) -->
+                <ui:Foldout name="output-settings-foldout" text="Output Settings" value="false"
+                    class="maskmaker-foldout">
+                    <ui:TextField name="filename-field" label="File Name" />
+                    <ui:Label name="output-drop-area" text="Drop folder or image here"
+                        class="maskmaker-drop-area" />
+                    <ui:VisualElement class="maskmaker-row">
+                        <ui:TextField name="output-dir-field" label="Output Folder" class="maskmaker-grow" />
+                        <ui:Button name="browse-btn" text="..." />
+                    </ui:VisualElement>
+                    <ui:Toggle name="use-tex-folder-toggle" label="Use Texture Folder" />
+                    <ui:Toggle name="save-inverted-toggle" label="Save Inverted Too" />
+                </ui:Foldout>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:TwoPaneSplitView>
+
+    <!-- ステータスバー -->
+    <ui:Label name="status-label" text="Ready" class="dennoko-status" />
+
+</ui:UXML>

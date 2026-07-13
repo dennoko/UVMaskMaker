@@ -1,0 +1,135 @@
+/* ============================================================
+   MaskMakerStyles.uss
+   MaskMaker ツール固有のスタイル。
+   DennokoTheme.uss と併せてルート (.dennoko-root) にロードする。
+
+   【規約】セレクタは必ず .dennoko-root を前置し、
+   カラーは var(--dennoko-*) 変数を経由する。
+   ============================================================ */
+
+/* ─── プレビュー領域 ─────────────────────────────────────── */
+
+/* プレビュー viewport (UVPreviewElement)。
+   ズーム時にはみ出す描画内容は overflow: hidden でクリップする */
+.dennoko-root .maskmaker-preview-viewport {
+    flex-grow: 1;
+    overflow: hidden;
+    background-color: var(--dennoko-surface-0);
+}
+
+/* 解析前に viewport 中央へ表示するヒントテキスト */
+.dennoko-root .maskmaker-preview-hint {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    -unity-text-align: middle-center;
+    color: var(--dennoko-text-tertiary);
+    font-size: 11px;
+}
+
+/* プレビュー上下のツールバー (dennoko-toolbar と併用)。縮小時に潰さない */
+.dennoko-root .maskmaker-preview-toolbar {
+    flex-shrink: 0;
+}
+
+/* ツールバー内の小型ボタン */
+.dennoko-root .unity-button.maskmaker-toolbar-btn {
+    font-size: 10px;
+    padding: 2px 8px;
+    margin: 1px 2px;
+}
+
+/* ツールバー内のズーム倍率表示 */
+.dennoko-root .maskmaker-zoom-label {
+    color: var(--dennoko-text-tertiary);
+    font-size: 10px;
+    -unity-text-align: middle-right;
+    min-width: 40px;
+}
+
+/* フッターのブラシサイズスライダー */
+.dennoko-root .maskmaker-brush-slider {
+    width: 110px;
+    margin: 0 4px;
+}
+
+/* ─── 汎用レイアウト ─────────────────────────────────────── */
+
+/* 横並び行 (IMGUI の BeginHorizontal 相当) */
+.dennoko-root .maskmaker-row {
+    flex-direction: row;
+    align-items: center;
+}
+
+/* 右寄せ用スペーサー (FlexibleSpace 相当) */
+.dennoko-root .maskmaker-spacer {
+    flex-grow: 1;
+}
+
+/* row 内で幅いっぱいに広げるフィールド */
+.dennoko-root .maskmaker-grow {
+    flex-grow: 1;
+}
+
+/* ─── ドラッグ&ドロップ領域 ─────────────────────────────── */
+
+.dennoko-root .maskmaker-drop-area {
+    background-color: var(--dennoko-surface-0);
+    border-color: var(--dennoko-outline);
+    border-width: 1px;
+    border-radius: 4px;
+    padding: 8px;
+    margin: 2px 0 6px 0;
+    -unity-text-align: middle-center;
+    color: var(--dennoko-text-tertiary);
+    font-size: 10px;
+}
+
+.dennoko-root .maskmaker-drop-area--hover {
+    border-color: var(--dennoko-semantic-info);
+    color: var(--dennoko-text-secondary);
+}
+
+/* ─── カード内フィールドのラベル幅を揃える ───────────────── */
+
+.dennoko-root .dennoko-card .unity-base-field__label {
+    min-width: 110px;
+    flex-basis: 110px;
+    flex-shrink: 0;
+}
+
+/* RGBA チャンネルトグルのような小さなトグルはラベル幅を持たせない */
+.dennoko-root .maskmaker-channel-toggle .unity-base-field__label {
+    min-width: 20px;
+    flex-basis: 20px;
+}
+
+/* ─── スプリッター (TwoPaneSplitView) ────────────────────── */
+
+/* 分割ビュー自体を伸ばす */
+.dennoko-root .unity-two-pane-split-view {
+    flex-grow: 1;
+}
+
+/* ドラッグライン (掴めるバー) の配色 */
+.dennoko-root .unity-two-pane-split-view__dragline-anchor {
+    background-color: var(--dennoko-outline);
+}
+
+.dennoko-root .unity-two-pane-split-view__dragline-anchor--vertical {
+    height: 4px;
+}
+
+/* ─── Foldout セクション見出し (Advanced 系) ─────────────── */
+
+.dennoko-root .maskmaker-foldout {
+    margin: 0 8px 6px 8px;
+}
+
+.dennoko-root .maskmaker-foldout > .unity-foldout__toggle .unity-toggle__text {
+    font-size: 10px;
+    -unity-font-style: bold;
+    color: var(--dennoko-text-tertiary);
+}

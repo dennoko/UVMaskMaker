@@ -4,15 +4,27 @@
 - Object: 対象となる GameObject (MeshRenderer / SkinnedMeshRenderer) を指定
 - Work Copy: アバターのポーズ変形等の影響を受けない、作業用の静的コピーを作成/削除します
 
+マスク画像の読み込み (Import Mask Image)
+- Image: 既存のマスク画像を読み込み、黒い領域を手描きペイントエリアとして取り込みます
+- Black Threshold: 取り込み時の黒判定しきい値を調整（0〜255）。アンチエイリアス等の調整に有用
+
 編集モード (Edit Mode)
-- Add / Remove: クリック時の選択/解除動作の切り替え
-- ホットキー: モード切替に使用するキー（デフォルト: R / 環境設定で変更可能）
+- Select (選択): UVアイランド単位の操作
+  - Add / Remove: クリック時の選択/解除動作の切り替え
+  - ホットキー: モード切替に使用するキー（デフォルト: R / 環境設定で変更可能）
+- Paint (ペイント): プレビュー上でのピクセル単位の描画操作
+  - Brush: 自由な線で描画
+  - Rect: 矩形範囲を塗りつぶし
+  - Lasso: 投げ縄（囲い込み）で塗りつぶし
+  - Eraser: 描画した部分の消去
+  - Size: ブラシ/消しゴムの太さを調整（1〜100px）
+  - Undo / Redo / Clear: 描画履歴の戻す/進める、または全消去
 
 選択操作 (Selection Actions)
 - Analyze UVs: 現在のメッシュと設定でUV解析を実行（初回や設定変更時に実行）
-- Invert: 現在の選択状態を反転
+- Invert: 現在の選択状態（アイランド単位）を反転
 - Select All: すべてのアイランドを選択
-- Clear: 選択をすべて解除
+- Clear: 全アイランドの選択を解除
 
 UVプレビュー (UV Preview)
 - UV表示: 展開図を表示し、クリックでの選択も可能
@@ -55,15 +67,27 @@ Target Model
 - Object: Specify the target GameObject (MeshRenderer / SkinnedMeshRenderer)
 - Work Copy: Create/Remove a static working copy unaffected by pose deformations
 
+Import Mask Image
+- Image: Load an existing mask image and import its black regions as hand-painted areas
+- Black Threshold: Adjust the threshold for black detection (0-255). Useful for handling AA or gray edges
+
 Edit Mode
-- Add / Remove: Toggle between selecting and deselecting on click
-- Hotkey: Key used to switch modes (Default: R / Customizable in Preferences)
+- Select: UV island-based operations
+  - Add / Remove: Toggle between selecting and deselecting on click
+  - Hotkey: Key used to switch modes (Default: R / Customizable in Preferences)
+- Paint: Pixel-based drawing on the preview
+  - Brush: Draw freehand lines
+  - Rect: Fill rectangular areas
+  - Lasso: Fill freehand selection areas
+  - Eraser: Erase painted pixels
+  - Size: Adjust thickness for Brush/Eraser (1-100px)
+  - Undo / Redo / Clear: Step through history or erase all hand-paint data
 
 Selection Actions
 - Analyze UVs: Analyze UVs with current settings (Run initially or after changing settings)
-- Invert: Invert current selection
+- Invert: Invert current island selection
 - Select All: Select all islands
-- Clear: Deselect all
+- Clear: Deselect all islands
 
 UV Preview
 - UV Display: Shows the UV layout; clickable for selection

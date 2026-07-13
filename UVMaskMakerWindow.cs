@@ -1,6 +1,10 @@
 // UVMaskMakerWindow.cs
 // Unity 2022.3+ Editor tool to generate black/white UV mask images based on selected UV islands.
-// Refactored with modular UI components following SOLID principles.
+// UI Toolkit (UXML/USS) implementation using the dennokoworks floating design system.
+// Layout:
+//   [Header]  Window title
+//   [Split ]  Preview zone (zoom/pan/paint) / Settings (scrollable cards)
+//   [Fixed ]  Status bar
 
 using System;
 using System.Collections.Generic;
@@ -9,6 +13,7 @@ using System.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.UIElements;
 using Dennoko.UVTools.Core;
 using Dennoko.UVTools.Data;
 using Dennoko.UVTools.Services;
@@ -18,36 +23,55 @@ namespace Dennoko.UVTools
 {
     /// <summary>
     /// Main EditorWindow for UV Mask Maker tool.
-    /// Layout:
-    ///   [Fixed]   Preview area (zoom/pan, outside scroll)
-    ///   [Scroll]  Settings  — Step 1 Target → Step 2 Selection → Step 3 Export → Advanced
-    ///   [Fixed]   Status bar
+    /// UI structure lives in UVMaskMakerWindow.uxml, styling in DennokoTheme.uss +
+    /// MaskMakerStyles.uss. This class wires services, section binders and the
+    /// UVPreviewElement together.
     /// </summary>
     public class UVMaskMakerWindow : EditorWindow
     {
-        // ── Layout constants ──────────────────────────────────────────────────
-        private const float StatusBarHeight     = 22f;
-        private const float SplitterHeight      = 5f;
-        private const float PreviewMinHeight    = 80f;
-        private const float PreviewMaxHeight    = 700f;
-        private float       _previewSplitY      = 280f;
-        private bool        _splitterDragging   = false;
+        // ── UXML / USS asset GUIDs (from the .meta files in UI/) ─────────────
+        private const string UXML_GUID       = "de41846a61644c30919bab3fc03bc850";
+        private const string THEME_USS_GUID  = "c5f01bd7afc0497e8242567db620345e";
+        private const string STYLES_USS_GUID = "1133541777034564908d34edfe2b5a64";
 
         // ── Services ─────────────────────────────────────────────────────────
-        private SettingsManager   _settingsManager;
+        private SettingsManager     _settingsManager;
         private LocalizationService _localization;
-        private PickingService    _pickingService;
-        private OverlayRenderer   _overlayRenderer;
-        private WorkCopyService   _workCopyService;
-        private UVPreviewDrawer   _previewDrawer;
-        private MaskPainter       _maskPainter;
-        private IMaskExporter     _exporter;
+        private PickingService      _pickingService;
+        private OverlayRenderer     _overlayRenderer;
+        private WorkCopyService     _workCopyService;
+        private MaskPainter         _maskPainter;
+        private IMaskExporter       _exporter;
 
-        // ── UI Drawers (non-selection sections) ───────────────────────────────
-        private TargetSectionDrawer  _targetDrawer;
-        private MaskImportDrawer     _maskImportDrawer;
-        private ExportSectionDrawer  _exportDrawer;
-        private AdvancedOptionsDrawer _advancedDrawer;
+        // ── UI: preview ──────────────────────────────────────────────────────
+        private UVPreviewElement _preview;
+        private Label  _zoomLabel;
+        private Button _undoBtn, _redoBtn, _clearPaintBtn;
+        private Button _modeSelectBtn, _modePaintBtn;
+        private Button _subBrushBtn, _subRectBtn, _subLassoBtn, _subEraserBtn;
+        private VisualElement _paintTools;
+        private Label  _brushSizeLabel;
+        private SliderInt _brushSizeSlider;
+        private Button _resetViewBtn;
+
+        // ── UI: selection card ───────────────────────────────────────────────
+        private VisualElement _selectionCard;
+        private Label  _selectionTitle;
+        private Button _modeAddBtn, _modeRemoveBtn;
+        private Button _invertBtn, _selectAllBtn, _clearSelectionBtn;
+
+        // ── UI: analysis-dependent buttons owned by binder sections ─────────
+        private Button _savePngBtn, _bakeVcBtn;
+
+        // ── UI: status bar ───────────────────────────────────────────────────
+        private Label _statusLabel;
+        private IVisualElementScheduledItem _statusResetSchedule;
+
+        // ── Section binders ──────────────────────────────────────────────────
+        private TargetSectionBinder   _targetBinder;
+        private MaskImportBinder      _maskImportBinder;
+        private ExportSectionBinder   _exportBinder;
+        private AdvancedOptionsBinder _advancedBinder;
 
         // ── Settings ──────────────────────────────────────────────────────────
         private MaskSettings _settings;
@@ -61,15 +85,13 @@ namespace Dennoko.UVTools
         private GameObject _sourceTargetGO;
 
         // ── UI state ─────────────────────────────────────────────────────────
-        private Vector2 _scrollPos;
-        private double  _lastHotkeyToggleTime = 0;
-        private bool    _suppressAutoWorkCopy = false;
+        private double _lastHotkeyToggleTime = 0;
+        private bool   _suppressAutoWorkCopy = false;
 
         // ── Computed / selection data ─────────────────────────────────────────
-        private UVAnalysis      _analysis;
-        private HashSet<int>    _selectedIslands = new HashSet<int>();
-        private bool            _previewDirty    = true;
-        private Mesh            _bakedMesh;
+        private UVAnalysis   _analysis;
+        private HashSet<int> _selectedIslands = new HashSet<int>();
+        private Mesh         _bakedMesh;
 
         // ── Asset references ─────────────────────────────────────────────────
         private Texture2D _basePNG;
@@ -77,13 +99,41 @@ namespace Dennoko.UVTools
 
         // ── Status bar ────────────────────────────────────────────────────────
         private enum StatusType { Info, Success, Error }
-        private string     _statusMessage   = "";
-        private StatusType _statusType      = StatusType.Info;
-        private double     _statusResetTime = -1.0;
 
         // ── Log ───────────────────────────────────────────────────────────────
         private static string LogDir  => Path.Combine(Application.dataPath, "../Logs/MaskMaker");
         private static string LogPath => Path.Combine(LogDir, "MaskMaker.log");
+
+        // ─── 標準フォント: OS のメイリオ ─────────────────────────────────
+        // フォントアセットを同梱せず、端末インストール済みのメイリオを動的参照する。
+        // ⚠ UI Toolkit のテキストは TextCore で描画されるため、レガシー Font
+        //   (Font.CreateDynamicFontFromOSFont) を FontDefinition.FromFont() で渡すと
+        //   グリフ生成に失敗し文字が一切表示されなくなる。必ず OS フォントから
+        //   直接 SDF FontAsset を生成すること。
+        // 未搭載環境 (Mac/Linux 等) では null を返し、エディタ標準フォントのままになる。
+        private const string UI_FONT_FAMILY = "Meiryo";
+        private static UnityEngine.TextCore.Text.FontAsset _uiFontAsset;
+        private static bool _uiFontSearched;
+
+        private static UnityEngine.TextCore.Text.FontAsset GetUIFontAsset()
+        {
+            if (_uiFontSearched) return _uiFontAsset;
+            _uiFontSearched = true;
+
+            try
+            {
+                _uiFontAsset = UnityEngine.TextCore.Text.FontAsset.CreateFontAsset(UI_FONT_FAMILY, "Regular");
+                if (_uiFontAsset != null)
+                {
+                    _uiFontAsset.hideFlags = HideFlags.HideAndDontSave;
+                }
+            }
+            catch
+            {
+                _uiFontAsset = null;
+            }
+            return _uiFontAsset;
+        }
 
         // ─────────────────────────────────────────────────────────────────────
         [MenuItem("dennokoworks/MaskMaker")]
@@ -109,10 +159,9 @@ namespace Dennoko.UVTools
             catch { /* ignore */ }
 
             InitializeServices();
-            InitializeDrawers();
+            InitializeBinders();
             LoadAssetReferences();
             SubscribeToEvents();
-            wantsMouseMove = true;
         }
 
         private void InitializeServices()
@@ -124,86 +173,80 @@ namespace Dennoko.UVTools
             _pickingService  = new PickingService();
             _overlayRenderer = new OverlayRenderer();
             _workCopyService = new WorkCopyService();
-            _previewDrawer   = new UVPreviewDrawer();
             _maskPainter     = new MaskPainter(_settings.TextureSize);
             _exporter        = new PngExporter();
         }
 
-        private void InitializeDrawers()
+        private void InitializeBinders()
         {
-            _targetDrawer   = new TargetSectionDrawer(_localization);
-            _maskImportDrawer = new MaskImportDrawer(_localization);
-            _exportDrawer   = new ExportSectionDrawer(_localization);
-            _advancedDrawer = new AdvancedOptionsDrawer(_localization);
+            _targetBinder     = new TargetSectionBinder(_localization);
+            _maskImportBinder = new MaskImportBinder(_localization);
+            _exportBinder     = new ExportSectionBinder(_localization);
+            _advancedBinder   = new AdvancedOptionsBinder(_localization);
 
-            // Target drawer events
-            _targetDrawer.OnTargetChanged      += SetTarget;
-            _targetDrawer.OnBakedMeshChanged   += OnBakedMeshOptionChanged;
-            _targetDrawer.OnSetupWorkCopyClicked   += SetupWorkCopy;
-            _targetDrawer.OnCleanupWorkCopyClicked += CleanupWorkCopy;
-            _targetDrawer.OnTargetSubmeshChanged   += idx =>
+            // Target binder events
+            _targetBinder.OnTargetChanged          += SetTarget;
+            _targetBinder.OnBakedMeshChanged       += OnBakedMeshOptionChanged;
+            _targetBinder.OnSetupWorkCopyClicked   += SetupWorkCopy;
+            _targetBinder.OnCleanupWorkCopyClicked += CleanupWorkCopy;
+            _targetBinder.OnTargetSubmeshChanged   += idx =>
             {
                 _settings.TargetSubmesh = idx;
                 _settingsManager.Save(_settings);
                 AnalyzeTargetMesh();
             };
-            _targetDrawer.OnUVChannelChanged += ch =>
+            _targetBinder.OnUVChannelChanged += ch =>
             {
                 _settings.UVChannel = ch;
                 _settingsManager.Save(_settings);
                 AnalyzeTargetMesh();
             };
 
-            // Mask import drawer events
-            _maskImportDrawer.OnLoadClicked += LoadMaskImage;
+            // Mask import binder events
+            _maskImportBinder.OnLoadClicked += LoadMaskImage;
 
-            // Export drawer events
-            _exportDrawer.OnSaveClicked           += SaveMaskPNG;
-            _exportDrawer.OnResolutionChanged     += size =>
+            // Export binder events
+            _exportBinder.OnSaveClicked       += SaveMaskPNG;
+            _exportBinder.OnResolutionChanged += size =>
             {
                 _settings.TextureSize = size;
-                _previewDirty = true;
                 _settingsManager.Save(_settings);
-                _previewDrawer.InvalidateLabelMap();
+                _preview?.InvalidateLabelMap();
+                _preview?.MarkDirty();
             };
-            _exportDrawer.OnOutputDirChanged      += dir  => { _settings.OutputDir = dir; _settingsManager.Save(_settings); };
-            _exportDrawer.OnSaveInvertedChanged   += val  => { _settings.SaveInvertedToo = val; _settingsManager.Save(_settings); };
-            _exportDrawer.OnInvertMaskChanged     += val  => { _settings.InvertMask = val; _previewDirty = true; _settingsManager.Save(_settings); };
-            _exportDrawer.OnPixelMarginChanged    += val  => { _settings.PixelMargin = val; _previewDirty = true; _settingsManager.Save(_settings); };
-            _exportDrawer.OnUseTextureFolderChanged += val => { _settings.UseTextureFolder = val; _settingsManager.Save(_settings); };
+            _exportBinder.OnOutputDirChanged      += dir  => { _settings.OutputDir = dir; _settingsManager.Save(_settings); _exportBinder.UpdateState(_settings); };
+            _exportBinder.OnSaveInvertedChanged   += val  => { _settings.SaveInvertedToo = val; _settingsManager.Save(_settings); };
+            _exportBinder.OnInvertMaskChanged     += val  => { _settings.InvertMask = val; _settingsManager.Save(_settings); _preview?.MarkDirty(); };
+            _exportBinder.OnPixelMarginChanged    += val  => { _settings.PixelMargin = val; _settingsManager.Save(_settings); _preview?.MarkDirty(); };
+            _exportBinder.OnUseTextureFolderChanged += val => { _settings.UseTextureFolder = val; _settingsManager.Save(_settings); _exportBinder.UpdateState(_settings); };
 
-            // Advanced drawer events
-            WireAdvancedDrawerEvents();
-
-            // Preview drawer: repaint on view change
-            _previewDrawer.OnIslandClicked += OnPreviewIslandClicked;
-            _previewDrawer.OnPaintStrokeFinished += OnPaintStrokeFinished;
-            _previewDrawer.OnViewChanged   += Repaint;
+            // Advanced binder events
+            WireAdvancedBinderEvents();
         }
 
-        private void WireAdvancedDrawerEvents()
+        private void WireAdvancedBinderEvents()
         {
-            _advancedDrawer.OnOverlayOnTopChanged       += v => { _settings.OverlayOnTop           = v; _settingsManager.Save(_settings); SceneView.RepaintAll(); };
-            _advancedDrawer.OnDisableAAChanged          += v => { _settings.DisableAA              = v; _settingsManager.Save(_settings); SceneView.RepaintAll(); };
-            _advancedDrawer.OnBackfaceCullChanged       += v => { _settings.BackfaceCull           = v; _settingsManager.Save(_settings); SceneView.RepaintAll(); };
-            _advancedDrawer.OnThicknessChanged          += v => { _settings.OverlaySeamThickness   = v; _settingsManager.Save(_settings); SceneView.RepaintAll(); };
-            _advancedDrawer.OnDepthOffsetChanged        += v => { _settings.OverlayDepthOffset     = v; _settingsManager.Save(_settings); SceneView.RepaintAll(); };
-            _advancedDrawer.OnSeamColorChanged          += c => { _settings.SeamColor              = c; _settingsManager.Save(_settings); SceneView.RepaintAll(); };
-            _advancedDrawer.OnSelectedColorChanged      += c => { _settings.SelectedSceneColor     = c; _settingsManager.Save(_settings); SceneView.RepaintAll(); };
-            _advancedDrawer.OnPreviewFillColorChanged   += c => { _settings.PreviewFillSelectedColor = c; _previewDirty = true; _settingsManager.Save(_settings); };
-            _advancedDrawer.OnOverlayAlphaChanged       += v => { _settings.PreviewOverlayAlpha    = v; _previewDirty = true; _settingsManager.Save(_settings); };
-            _advancedDrawer.OnShowIslandPreviewChanged  += v => { _settings.ShowIslandPreview      = v; _settingsManager.Save(_settings); Repaint(); };
-            _advancedDrawer.OnPreviewOverlayBaseChanged += v => { _settings.PreviewOverlayBaseTex  = v; _settingsManager.Save(_settings); Repaint(); };
-            _advancedDrawer.OnChannelWriteEnabledChanged += v => { _settings.ChannelWriteEnabled   = v; _settingsManager.Save(_settings); };
-            _advancedDrawer.OnBasePNGChanged            += tex => { _basePNG = tex; _settingsManager.SetBasePNGPath(tex ? AssetDatabase.GetAssetPath(tex) : ""); };
-            _advancedDrawer.OnChannelsChanged           += (r, g, b, a) => { _settings.WriteR = r; _settings.WriteG = g; _settings.WriteB = b; _settings.WriteA = a; _settingsManager.Save(_settings); };
-            _advancedDrawer.OnBakeVertexColorClicked    += BakeMaskToVertexColors;
-            _advancedDrawer.OnBaseVCMeshChanged         += m => { _baseVCMesh = m; _settingsManager.SetBaseVCMeshPath(m ? AssetDatabase.GetAssetPath(m) : ""); };
-            _advancedDrawer.OnOverwriteExistingChanged  += v => { _settings.OverwriteExistingVC   = v; _settingsManager.Save(_settings); };
-            _advancedDrawer.OnWorkCopyOffsetChanged     += v => { _settings.WorkCopyOffset        = v; _settingsManager.Save(_settings); };
-            _advancedDrawer.OnAutoWorkCopyChanged       += v => { _settings.AutoWorkCopy          = v; _settingsManager.Save(_settings); };
-            _advancedDrawer.OnHotkeyChanged             += key => { _settings.ModeToggleHotkey    = key; _settingsManager.Save(_settings); };
-            _advancedDrawer.OnUseEnglishChanged         += OnLanguageChanged;
+            _advancedBinder.OnOverlayOnTopChanged       += v => { _settings.OverlayOnTop           = v; _settingsManager.Save(_settings); SceneView.RepaintAll(); };
+            _advancedBinder.OnDisableAAChanged          += v => { _settings.DisableAA              = v; _settingsManager.Save(_settings); SceneView.RepaintAll(); };
+            _advancedBinder.OnBackfaceCullChanged       += v => { _settings.BackfaceCull           = v; _settingsManager.Save(_settings); SceneView.RepaintAll(); };
+            _advancedBinder.OnThicknessChanged          += v => { _settings.OverlaySeamThickness   = v; _settingsManager.Save(_settings); SceneView.RepaintAll(); };
+            _advancedBinder.OnDepthOffsetChanged        += v => { _settings.OverlayDepthOffset     = v; _settingsManager.Save(_settings); SceneView.RepaintAll(); };
+            _advancedBinder.OnSeamColorChanged          += c => { _settings.SeamColor              = c; _settingsManager.Save(_settings); SceneView.RepaintAll(); };
+            _advancedBinder.OnSelectedColorChanged      += c => { _settings.SelectedSceneColor     = c; _settingsManager.Save(_settings); SceneView.RepaintAll(); };
+            _advancedBinder.OnPreviewFillColorChanged   += c => { _settings.PreviewFillSelectedColor = c; _settingsManager.Save(_settings); _preview?.MarkDirty(); };
+            _advancedBinder.OnOverlayAlphaChanged       += v => { _settings.PreviewOverlayAlpha    = v; _settingsManager.Save(_settings); _preview?.MarkDirty(); };
+            _advancedBinder.OnShowIslandPreviewChanged  += v => { _settings.ShowIslandPreview      = v; _settingsManager.Save(_settings); _preview?.MarkDirtyRepaint(); };
+            _advancedBinder.OnPreviewOverlayBaseChanged += v => { _settings.PreviewOverlayBaseTex  = v; _settingsManager.Save(_settings); RefreshPreviewBaseTexture(); };
+            _advancedBinder.OnChannelWriteEnabledChanged += v => { _settings.ChannelWriteEnabled   = v; _settingsManager.Save(_settings); };
+            _advancedBinder.OnBasePNGChanged            += tex => { _basePNG = tex; _settingsManager.SetBasePNGPath(tex ? AssetDatabase.GetAssetPath(tex) : ""); };
+            _advancedBinder.OnChannelsChanged           += (r, g, b, a) => { _settings.WriteR = r; _settings.WriteG = g; _settings.WriteB = b; _settings.WriteA = a; _settingsManager.Save(_settings); };
+            _advancedBinder.OnBakeVertexColorClicked    += BakeMaskToVertexColors;
+            _advancedBinder.OnBaseVCMeshChanged         += m => { _baseVCMesh = m; _settingsManager.SetBaseVCMeshPath(m ? AssetDatabase.GetAssetPath(m) : ""); };
+            _advancedBinder.OnOverwriteExistingChanged  += v => { _settings.OverwriteExistingVC   = v; _settingsManager.Save(_settings); };
+            _advancedBinder.OnWorkCopyOffsetChanged     += v => { _settings.WorkCopyOffset        = v; _settingsManager.Save(_settings); };
+            _advancedBinder.OnAutoWorkCopyChanged       += v => { _settings.AutoWorkCopy          = v; _settingsManager.Save(_settings); };
+            _advancedBinder.OnHotkeyChanged             += key => { _settings.ModeToggleHotkey    = key; _settingsManager.Save(_settings); };
+            _advancedBinder.OnUseEnglishChanged         += OnLanguageChanged;
         }
 
         private void LoadAssetReferences()
@@ -217,7 +260,6 @@ namespace Dennoko.UVTools
         private void SubscribeToEvents()
         {
             SceneView.duringSceneGui += OnSceneGUI;
-            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
             EditorSceneManager.sceneSaving += OnSceneSaving;
             EditorApplication.update += EditorUpdate;
         }
@@ -225,7 +267,6 @@ namespace Dennoko.UVTools
         private void OnDisable()
         {
             SceneView.duringSceneGui -= OnSceneGUI;
-            EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
             EditorSceneManager.sceneSaving -= OnSceneSaving;
             EditorApplication.update -= EditorUpdate;
 
@@ -238,426 +279,356 @@ namespace Dennoko.UVTools
                 _sourceTargetGO.SetActive(true);
             }
 
-            if (_previewDrawer != null)
-            {
-                _previewDrawer.OnIslandClicked -= OnPreviewIslandClicked;
-                _previewDrawer.OnViewChanged   -= Repaint;
-                _previewDrawer.Dispose();
-            }
-            if (_advancedDrawer != null) _advancedDrawer.OnUseEnglishChanged -= OnLanguageChanged;
-
+            // _preview disposes its textures via DetachFromPanelEvent
             if (_bakedMesh != null) { try { DestroyImmediate(_bakedMesh); } catch { } _bakedMesh = null; }
 
             Log("[OnDisable] Window closed");
         }
 
-        private void OnPlayModeStateChanged(PlayModeStateChange state) { }
         private void OnSceneSaving(UnityEngine.SceneManagement.Scene scene, string path) => _pickingService?.Cleanup();
 
         /// <summary>
-        /// Called every editor frame. Forces continuous repainting during active paint strokes
-        /// so the preview texture updates in real-time rather than on mouse release.
-        /// Also repaints the scene view so hand-painted regions are immediately visible
-        /// on the 3D mesh via the mask overlay renderer.
+        /// Called every editor frame. Repaints the scene view during active paint
+        /// strokes so hand-painted regions are immediately visible on the 3D mesh
+        /// via the mask overlay renderer. The preview element repaints itself.
         /// </summary>
         private void EditorUpdate()
         {
-            if (_previewDrawer != null && _previewDrawer.IsPainting)
+            if (_preview != null && _preview.IsPainting)
             {
-                Repaint();
                 SceneView.RepaintAll();
             }
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        // OnGUI — 3-zone layout
+        // CreateGUI — UI Toolkit setup
         // ─────────────────────────────────────────────────────────────────────
 
-        private void OnGUI()
+        public void CreateGUI()
         {
-            // Status auto-reset
-            if (_statusResetTime > 0 && EditorApplication.timeSinceStartup > _statusResetTime)
+            VisualElement root = rootVisualElement;
+
+            // テーマ非依存のためのルートクラスを適用
+            root.AddToClassList("dennoko-root");
+            // USS ロード失敗時も背景が明るくならないよう Surface0 を C# 側でも保証
+            root.style.backgroundColor = (Color)new Color32(0x12, 0x12, 0x12, 0xFF);
+            root.style.flexGrow = 1;
+
+            // 標準フォント: OS のメイリオが使えれば全体に適用
+            var uiFontAsset = GetUIFontAsset();
+            if (uiFontAsset != null)
             {
-                _statusMessage   = _localization.Get("status_ready", "Ready");
-                _statusType      = StatusType.Info;
-                _statusResetTime = -1.0;
-                Repaint();
+                root.style.unityFontDefinition = FontDefinition.FromSDFFont(uiFontAsset);
             }
 
-            // Initialize design system (textures / styles)
-            EditorUIStyles.Initialize();
+            // USS のロードと適用 (テーマ + ツール固有)
+            LoadStyleSheet(root, THEME_USS_GUID);
+            LoadStyleSheet(root, STYLES_USS_GUID);
 
-            HandleHotkey();
+            // UXML のロードとインスタンス化
+            string uxmlPath = AssetDatabase.GUIDToAssetPath(UXML_GUID);
+            var uxml = string.IsNullOrEmpty(uxmlPath)
+                ? null
+                : AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(uxmlPath);
+            if (uxml == null)
+            {
+                root.Add(new Label("UXML Asset が見つかりません。GUID を確認してください。"));
+                return;
+            }
+            uxml.CloneTree(root);
 
-            float w = position.width;
-            float h = position.height;
-            float settingsTop = _previewSplitY + SplitterHeight;
-            float settingsH   = Mathf.Max(h - settingsTop - StatusBarHeight, 50f);
-
-            // ── Window background ────────────────────────────────────────────
-            EditorGUI.DrawRect(new Rect(0, 0, w, h), EditorUIStyles.Surface0);
-
-            // ── Zone 1: Preview (fixed) ───────────────────────────────────────
-            GUILayout.BeginArea(new Rect(0, 0, w, _previewSplitY));
-            DrawPreviewZone(w, _previewSplitY);
-            GUILayout.EndArea();
-
-            // ── Splitter ──────────────────────────────────────────────────────
-            HandleSplitter(new Rect(0, _previewSplitY, w, SplitterHeight), h);
-
-            // ── Zone 2: Settings (scrollable) ────────────────────────────────
-            GUILayout.BeginArea(new Rect(0, settingsTop, w, settingsH));
-            _scrollPos = EditorGUILayout.BeginScrollView(_scrollPos,
-                GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
-            DrawSettingsContent();
-            EditorGUILayout.EndScrollView();
-            GUILayout.EndArea();
-
-            // ── Zone 3: Status bar (fixed) ───────────────────────────────────
-            GUILayout.BeginArea(new Rect(0, h - StatusBarHeight, w, StatusBarHeight));
-            DrawStatusBarZone();
-            GUILayout.EndArea();
+            InitializeUI(root);
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        // Zone 1: Preview
-        // ─────────────────────────────────────────────────────────────────────
-
-        private void DrawPreviewZone(float w, float h)
+        private static void LoadStyleSheet(VisualElement root, string guid)
         {
-            const float headerH = 26f;
-            const float footerH = 26f;
-            const float pad     = 4f;
-
-            // ── Header: PREVIEW title + Undo/Redo/Clear + zoom + reset ──
-            using (new EditorGUILayout.HorizontalScope(EditorUIStyles.ToolbarStyle, GUILayout.Height(headerH)))
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            var uss = string.IsNullOrEmpty(path)
+                ? null
+                : AssetDatabase.LoadAssetAtPath<StyleSheet>(path);
+            if (uss != null)
             {
-                GUILayout.Space(4);
-                GUILayout.Label("PREVIEW", EditorUIStyles.SectionHeaderSmallStyle);
-
-                GUILayout.Space(8);
-
-                // Paint action buttons (always visible, disabled when no paint data)
-                EditorGUI.BeginDisabledGroup(!_maskPainter.HasUndo);
-                if (GUILayout.Button(_localization.Get("tool_undo", "Undo"), EditorStyles.toolbarButton, GUILayout.Width(48)))
-                {
-                    _maskPainter.Undo();
-                    _previewDirty = true;
-                }
-                EditorGUI.EndDisabledGroup();
-
-                EditorGUI.BeginDisabledGroup(!_maskPainter.HasRedo);
-                if (GUILayout.Button(_localization.Get("tool_redo", "Redo"), EditorStyles.toolbarButton, GUILayout.Width(48)))
-                {
-                    _maskPainter.Redo();
-                    _previewDirty = true;
-                }
-                EditorGUI.EndDisabledGroup();
-
-                if (GUILayout.Button(_localization.Get("tool_clear", "Clear"), EditorStyles.toolbarButton, GUILayout.Width(48)))
-                {
-                    if (EditorUtility.DisplayDialog(
-                        _localization.Get("tool_clear", "Clear"),
-                        _localization.Get("tool_clear_confirm", "Clear all paint?"),
-                        "OK", "Cancel"))
-                    {
-                        _maskPainter.Clear();
-                        _previewDirty = true;
-                    }
-                }
-
-                GUILayout.FlexibleSpace();
-
-                // Zoom indicator
-                if (_analysis != null)
-                {
-                    GUILayout.Label(
-                        $"{Mathf.RoundToInt(_previewDrawer.ZoomLevel * 100)}%",
-                        EditorStyles.miniLabel,
-                        GUILayout.Width(42));
-                }
-
-                // Reset view button
-                if (GUILayout.Button(
-                    new GUIContent("reset", _localization.Get("preview_reset_view", "ビューをリセット")),
-                    EditorStyles.toolbarButton))
-                {
-                    _previewDrawer.ResetView();
-                }
-                GUILayout.Space(4);
+                root.styleSheets.Add(uss);
             }
-
-            // ── Preview content ──
-            var contentRect = new Rect(pad, headerH + pad, w - pad * 2f, h - headerH - footerH - pad * 2f);
-
-            if (_previewDirty)
+            else
             {
-                _previewDrawer.MarkDirty();
-                _previewDirty = false;
-            }
-
-            _previewDrawer.Draw(
-                contentRect,
-                _analysis,
-                _selectedIslands,
-                _settings,
-                _settings.PreviewOverlayBaseTex ? GetBaseTexture() : null,
-                _maskPainter,
-                _localization);
-
-            // ── Footer: Mode toggle + Brush Size + Eraser ──
-            DrawPaintFooter(w, h, footerH);
-        }
-
-        private void DrawPaintFooter(float w, float h, float footerH)
-        {
-            var r = new Rect(0, h - footerH, w, footerH);
-            GUILayout.BeginArea(r);
-            using (new EditorGUILayout.HorizontalScope(EditorUIStyles.ToolbarStyle, GUILayout.Height(footerH)))
-            {
-                GUILayout.Space(4);
-
-                // ── Select / Paint mode toggle ──────────────────────────────────
-                int toolMode = _settings.IsPaintMode ? 1 : 0;
-                GUIContent[] modes = new GUIContent[] {
-                    new GUIContent(_localization.Get("tool_select", "Select")),
-                    new GUIContent(_localization.Get("tool_paint",  "Paint"))
-                };
-                int newMode = GUILayout.Toolbar(toolMode, modes, GUILayout.Width(120));
-                if (newMode != toolMode)
-                {
-                    _settings.IsPaintMode = (newMode == 1);
-                    _settingsManager.Save(_settings);
-                }
-
-                GUILayout.Space(6);
-
-                EditorGUI.BeginDisabledGroup(!_settings.IsPaintMode);
-
-                // ── Paint sub-mode (Brush / Rect / Lasso / Eraser) ─────────────
-                int subMode = (int)_settings.PaintSubMode;
-                GUIContent[] subModes = new GUIContent[] {
-                    new GUIContent(_localization.Get("tool_brush",  "Brush")),
-                    new GUIContent(_localization.Get("tool_rect",   "Rect")),
-                    new GUIContent(_localization.Get("tool_lasso",  "Lasso")),
-                    new GUIContent(_localization.Get("tool_eraser", "Eraser"))
-                };
-                int newSubMode = GUILayout.Toolbar(subMode, subModes, GUILayout.Width(200));
-                if (newSubMode != subMode)
-                {
-                    _settings.PaintSubMode = (PaintSubMode)newSubMode;
-                    _settingsManager.Save(_settings);
-                }
-
-                GUILayout.Space(6);
-
-                // ── Brush size (Brush / Eraser のみ有効) ───────────────────────
-                bool usesSize = _settings.PaintSubMode == PaintSubMode.Brush
-                             || _settings.PaintSubMode == PaintSubMode.Eraser;
-                EditorGUI.BeginDisabledGroup(!usesSize);
-                GUILayout.Label(_localization.Get("brush_size", "Size"), GUILayout.Width(38));
-                int newSize = (int)GUILayout.HorizontalSlider(_settings.BrushSize, 1, 100, GUILayout.Width(80));
-                if (newSize != _settings.BrushSize)
-                {
-                    _settings.BrushSize = newSize;
-                    _settingsManager.Save(_settings);
-                }
-                EditorGUI.EndDisabledGroup();
-
-                EditorGUI.EndDisabledGroup();
-
-                GUILayout.FlexibleSpace();
-                GUILayout.Space(4);
-            }
-            GUILayout.EndArea();
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        // Zone 2: Settings content
-        // ─────────────────────────────────────────────────────────────────────
-
-        private void DrawSettingsContent()
-        {
-            EditorGUILayout.Space(EditorUIStyles.CardSpacing);
-
-            // ── STEP 1: Target ────────────────────────────────────────────────
-            _targetDrawer.Draw(_targetGO, _targetRenderer, _settings, _isWorkCopy);
-
-            EditorGUILayout.Space(EditorUIStyles.CardSpacing);
-
-            // ── Mask Image Import ─────────────────────────────────────────────
-            _maskImportDrawer.Draw();
-
-            EditorGUILayout.Space(EditorUIStyles.CardSpacing);
-
-            // ── STEP 2: Island Selection (mode + actions + count, combined) ───
-            DrawSelectionSection();
-
-            EditorGUILayout.Space(EditorUIStyles.CardSpacing);
-
-            // ── STEP 3: Export ────────────────────────────────────────────────
-            {
-                string fileName = _targetGO != null ? _targetGO.name : "uv_mask";
-                if (_isWorkCopy && fileName.EndsWith(" [WorkCopy]"))
-                    fileName = fileName.Replace(" [WorkCopy]", "");
-                _exportDrawer.FileName = fileName + "_mask";
-                _exportDrawer.Draw(_settings, _analysis != null, GetBaseTexturePath());
-            }
-
-            // ── Advanced (collapsible) ────────────────────────────────────────
-            _advancedDrawer.DrawOverlaySection(_settings, GetBaseTexture());
-            _advancedDrawer.DrawChannelWriteSection(_settings, _basePNG);
-            _advancedDrawer.DrawVertexColorSection(_settings, _baseVCMesh, _analysis != null);
-            _advancedDrawer.DrawPreferencesSection(_settings);
-
-            EditorGUILayout.Space(EditorUIStyles.CardSpacing);
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        // Selection section (Mode toggle + action buttons in a single card)
-        // ─────────────────────────────────────────────────────────────────────
-
-        private void DrawSelectionSection()
-        {
-            EditorUIStyles.BeginCard(_localization.Get("island_selection", "アイランド選択"));
-
-            GUI.enabled = _analysis != null;
-
-            // Add / Remove mode toolbar (centred)
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                GUILayout.FlexibleSpace();
-                int toolbar = GUILayout.Toolbar(
-                    _settings.AddMode ? 0 : 1,
-                    new[]
-                    {
-                        new GUIContent(_localization["mode_add"],    _localization["mode_add_tooltip"]),
-                        new GUIContent(_localization["mode_remove"], _localization["mode_remove_tooltip"])
-                    },
-                    GUILayout.Width(220));
-                bool newMode = toolbar == 0;
-                if (newMode != _settings.AddMode)
-                {
-                    _settings.AddMode = newMode;
-                    _settingsManager.Save(_settings);
-                }
-                GUILayout.FlexibleSpace();
-            }
-
-            EditorGUILayout.Space(EditorUIStyles.InnerSpacing);
-
-            // Action buttons
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                if (GUILayout.Button(
-                    new GUIContent(_localization["invert"],          _localization["invert_tooltip"]),
-                    EditorUIStyles.SmallButtonStyle))
-                    InvertSelection();
-
-                if (GUILayout.Button(
-                    new GUIContent(_localization["select_all"],      _localization["select_all_tooltip"]),
-                    EditorUIStyles.SmallButtonStyle))
-                    SelectAll();
-
-                if (GUILayout.Button(
-                    new GUIContent(_localization["clear_selection"], _localization["clear_selection_tooltip"]),
-                    EditorUIStyles.SmallButtonStyle))
-                    ClearSelection();
-            }
-
-            GUI.enabled = true;
-            EditorUIStyles.EndCard();
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        // Splitter (resize handle between preview and settings zones)
-        // ─────────────────────────────────────────────────────────────────────
-
-        private void HandleSplitter(Rect splitterRect, float windowHeight)
-        {
-            // Background fill
-            EditorGUI.DrawRect(splitterRect, EditorUIStyles.Surface2);
-            // Center indicator line
-            var lineRect = new Rect(
-                splitterRect.x,
-                splitterRect.y + Mathf.Floor(SplitterHeight * 0.5f) - 1f,
-                splitterRect.width, 2f);
-            EditorGUI.DrawRect(lineRect, EditorUIStyles.Outline);
-
-            // Resize cursor
-            EditorGUIUtility.AddCursorRect(splitterRect, MouseCursor.ResizeVertical);
-
-            var e = Event.current;
-            switch (e.type)
-            {
-                case EventType.MouseDown:
-                    if (e.button == 0 && splitterRect.Contains(e.mousePosition))
-                    {
-                        _splitterDragging = true;
-                        e.Use();
-                    }
-                    break;
-                case EventType.MouseDrag:
-                    if (_splitterDragging)
-                    {
-                        float maxY = windowHeight - StatusBarHeight - SplitterHeight - 50f;
-                        _previewSplitY = Mathf.Clamp(e.mousePosition.y, PreviewMinHeight, Mathf.Min(maxY, PreviewMaxHeight));
-                        e.Use();
-                        Repaint();
-                    }
-                    break;
-                case EventType.MouseUp:
-                    if (_splitterDragging && e.button == 0)
-                    {
-                        _splitterDragging = false;
-                        e.Use();
-                    }
-                    break;
+                Debug.LogWarning($"[{nameof(UVMaskMakerWindow)}] USS が見つかりません。GUID を確認してください: {guid}");
             }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        // Zone 3: Status bar
-        // ─────────────────────────────────────────────────────────────────────
-
-        private void DrawStatusBarZone()
+        private void InitializeUI(VisualElement root)
         {
-            string msg = string.IsNullOrEmpty(_statusMessage)
-                ? _localization.Get("status_ready", "Ready")
-                : _statusMessage;
-            GUILayout.Box(msg, GetStatusStyle(_statusType),
-                GUILayout.ExpandWidth(true), GUILayout.Height(StatusBarHeight));
+            // ── Preview element ─────────────────────────────────────────────
+            _preview = root.Q<UVPreviewElement>("uv-preview");
+            _preview.OnIslandClicked      += OnPreviewIslandClicked;
+            _preview.OnPaintStrokeFinished += OnPaintStrokeFinished;
+            _preview.OnViewChanged        += UpdateZoomLabel;
+            _preview.SetContext(_analysis, _selectedIslands, _settings, _maskPainter);
+            RefreshPreviewBaseTexture();
+
+            // ── Preview toolbar ─────────────────────────────────────────────
+            _zoomLabel     = root.Q<Label>("zoom-label");
+            _resetViewBtn  = root.Q<Button>("reset-view-btn");
+            _undoBtn       = root.Q<Button>("undo-btn");
+            _redoBtn       = root.Q<Button>("redo-btn");
+            _clearPaintBtn = root.Q<Button>("clear-paint-btn");
+
+            _undoBtn.clicked += () => { _maskPainter.Undo(); _preview.MarkDirty(); RefreshPaintToolbar(); };
+            _redoBtn.clicked += () => { _maskPainter.Redo(); _preview.MarkDirty(); RefreshPaintToolbar(); };
+            _clearPaintBtn.clicked += () =>
+            {
+                if (EditorUtility.DisplayDialog(
+                    _localization.Get("tool_clear", "Clear"),
+                    _localization.Get("tool_clear_confirm", "Clear all paint?"),
+                    "OK", "Cancel"))
+                {
+                    _maskPainter.Clear();
+                    _preview.MarkDirty();
+                    RefreshPaintToolbar();
+                }
+            };
+            _resetViewBtn.clicked += () => _preview.ResetView();
+
+            // ── Paint footer ────────────────────────────────────────────────
+            _modeSelectBtn   = root.Q<Button>("mode-select-btn");
+            _modePaintBtn    = root.Q<Button>("mode-paint-btn");
+            _paintTools      = root.Q<VisualElement>("paint-tools");
+            _subBrushBtn     = root.Q<Button>("sub-brush-btn");
+            _subRectBtn      = root.Q<Button>("sub-rect-btn");
+            _subLassoBtn     = root.Q<Button>("sub-lasso-btn");
+            _subEraserBtn    = root.Q<Button>("sub-eraser-btn");
+            _brushSizeLabel  = root.Q<Label>("brush-size-label");
+            _brushSizeSlider = root.Q<SliderInt>("brush-size-slider");
+
+            _modeSelectBtn.clicked += () => SetPaintMode(false);
+            _modePaintBtn.clicked  += () => SetPaintMode(true);
+            _subBrushBtn.clicked   += () => SetPaintSubMode(PaintSubMode.Brush);
+            _subRectBtn.clicked    += () => SetPaintSubMode(PaintSubMode.Rect);
+            _subLassoBtn.clicked   += () => SetPaintSubMode(PaintSubMode.Lasso);
+            _subEraserBtn.clicked  += () => SetPaintSubMode(PaintSubMode.Eraser);
+
+            _brushSizeSlider.value = _settings.BrushSize;
+            _brushSizeSlider.RegisterValueChangedCallback(evt =>
+            {
+                _settings.BrushSize = evt.newValue;
+                _settingsManager.Save(_settings);
+            });
+
+            // ── Selection card ──────────────────────────────────────────────
+            _selectionCard     = root.Q<VisualElement>("selection-card");
+            _selectionTitle    = root.Q<Label>("selection-title");
+            _modeAddBtn        = root.Q<Button>("mode-add-btn");
+            _modeRemoveBtn     = root.Q<Button>("mode-remove-btn");
+            _invertBtn         = root.Q<Button>("invert-btn");
+            _selectAllBtn      = root.Q<Button>("select-all-btn");
+            _clearSelectionBtn = root.Q<Button>("clear-selection-btn");
+
+            _modeAddBtn.clicked    += () => SetAddMode(true);
+            _modeRemoveBtn.clicked += () => SetAddMode(false);
+            _invertBtn.clicked         += InvertSelection;
+            _selectAllBtn.clicked      += SelectAll;
+            _clearSelectionBtn.clicked += ClearSelection;
+
+            // ── Analysis-dependent buttons (inside binder sections) ─────────
+            _savePngBtn = root.Q<Button>("save-png-btn");
+            _bakeVcBtn  = root.Q<Button>("bake-vc-btn");
+
+            // ── Section binders ─────────────────────────────────────────────
+            _targetBinder.Bind(root);
+            _maskImportBinder.Bind(root);
+            _exportBinder.Bind(root);
+            _advancedBinder.Bind(root);
+
+            _exportBinder.UpdateState(_settings);
+            _advancedBinder.UpdateState(_settings, _basePNG, _baseVCMesh, _analysis != null, GetBaseTexture());
+
+            // ── Status bar ──────────────────────────────────────────────────
+            _statusLabel = root.Q<Label>("status-label");
+
+            // ── Hotkey (window focus path; scene view path is in OnSceneGUI) ─
+            root.focusable = true;
+            root.RegisterCallback<KeyDownEvent>(OnRootKeyDown, TrickleDown.TrickleDown);
+
+            // ── Initial state ───────────────────────────────────────────────
+            ApplyLocalization();
+            RefreshTargetDependentUI();
+            RefreshModeUI();
+            RefreshPaintToolbar();
+            UpdateZoomLabel();
         }
 
-        private GUIStyle GetStatusStyle(StatusType type) => type switch
-        {
-            StatusType.Success => EditorUIStyles.StatusSuccessStyle,
-            StatusType.Error   => EditorUIStyles.StatusErrorStyle,
-            _                  => EditorUIStyles.StatusInfoStyle,
-        };
+        // ─────────────────────────────────────────────────────────────────────
+        // UI refresh helpers
+        // ─────────────────────────────────────────────────────────────────────
 
-        private void SetStatus(string message, StatusType type, double autoResetSecs = 4.0)
+        /// <summary>Applies localized texts/tooltips to window-owned elements and all binders.</summary>
+        private void ApplyLocalization()
         {
-            _statusMessage   = message;
-            _statusType      = type;
-            _statusResetTime = type == StatusType.Info
-                ? -1.0
-                : EditorApplication.timeSinceStartup + autoResetSecs;
-            Repaint();
+            if (_preview == null) return; // CreateGUI not yet run
+
+            _preview.SetHintText(_localization.Get("preview_hint", "Run analysis to preview UVs"));
+
+            _undoBtn.text       = _localization.Get("tool_undo", "Undo");
+            _redoBtn.text       = _localization.Get("tool_redo", "Redo");
+            _clearPaintBtn.text = _localization.Get("tool_clear", "Clear");
+            _resetViewBtn.text    = "Reset";
+            _resetViewBtn.tooltip = _localization.Get("preview_reset_view", "ビューをリセット");
+
+            _modeSelectBtn.text = _localization.Get("tool_select", "Select");
+            _modePaintBtn.text  = _localization.Get("tool_paint",  "Paint");
+            _subBrushBtn.text   = _localization.Get("tool_brush",  "Brush");
+            _subRectBtn.text    = _localization.Get("tool_rect",   "Rect");
+            _subLassoBtn.text   = _localization.Get("tool_lasso",  "Lasso");
+            _subEraserBtn.text  = _localization.Get("tool_eraser", "Eraser");
+            _brushSizeLabel.text = _localization.Get("brush_size", "Size");
+
+            _selectionTitle.text = _localization.Get("island_selection", "アイランド選択");
+            _modeAddBtn.text        = _localization["mode_add"];
+            _modeAddBtn.tooltip     = _localization["mode_add_tooltip"];
+            _modeRemoveBtn.text     = _localization["mode_remove"];
+            _modeRemoveBtn.tooltip  = _localization["mode_remove_tooltip"];
+            _invertBtn.text         = _localization["invert"];
+            _invertBtn.tooltip      = _localization["invert_tooltip"];
+            _selectAllBtn.text      = _localization["select_all"];
+            _selectAllBtn.tooltip   = _localization["select_all_tooltip"];
+            _clearSelectionBtn.text    = _localization["clear_selection"];
+            _clearSelectionBtn.tooltip = _localization["clear_selection_tooltip"];
+
+            _targetBinder.ApplyLocalization();
+            _maskImportBinder.ApplyLocalization();
+            _exportBinder.ApplyLocalization();
+            _advancedBinder.ApplyLocalization();
+
+            if (_statusLabel != null &&
+                !_statusLabel.ClassListContains("dennoko-status--success") &&
+                !_statusLabel.ClassListContains("dennoko-status--error"))
+            {
+                _statusLabel.text = _localization.Get("status_ready", "Ready");
+            }
+        }
+
+        /// <summary>Refreshes everything that depends on the current target / analysis.</summary>
+        private void RefreshTargetDependentUI()
+        {
+            if (_preview == null) return; // CreateGUI not yet run
+
+            bool hasAnalysis = _analysis != null;
+            _selectionCard.SetEnabled(hasAnalysis);
+            _savePngBtn?.SetEnabled(hasAnalysis);
+            _bakeVcBtn?.SetEnabled(hasAnalysis);
+
+            _targetBinder.UpdateState(_targetGO, _targetRenderer, _settings, _isWorkCopy);
+            _advancedBinder.UpdateState(_settings, _basePNG, _baseVCMesh, hasAnalysis, GetBaseTexture());
+
+            // Export file name follows the target
+            string fileName = _targetGO != null ? _targetGO.name : "uv_mask";
+            if (_isWorkCopy && fileName.EndsWith(" [WorkCopy]"))
+                fileName = fileName.Replace(" [WorkCopy]", "");
+            _exportBinder.FileName = fileName + "_mask";
+
+            RefreshPreviewBaseTexture();
+        }
+
+        /// <summary>Select/Paint mode + sub-mode button active states, brush slider enabling.</summary>
+        private void RefreshModeUI()
+        {
+            if (_preview == null) return;
+
+            _modeSelectBtn.EnableInClassList("dennoko-button-active", !_settings.IsPaintMode);
+            _modePaintBtn.EnableInClassList("dennoko-button-active", _settings.IsPaintMode);
+            _paintTools.SetEnabled(_settings.IsPaintMode);
+
+            _subBrushBtn.EnableInClassList("dennoko-button-active", _settings.PaintSubMode == PaintSubMode.Brush);
+            _subRectBtn.EnableInClassList("dennoko-button-active", _settings.PaintSubMode == PaintSubMode.Rect);
+            _subLassoBtn.EnableInClassList("dennoko-button-active", _settings.PaintSubMode == PaintSubMode.Lasso);
+            _subEraserBtn.EnableInClassList("dennoko-button-active", _settings.PaintSubMode == PaintSubMode.Eraser);
+
+            bool usesSize = _settings.PaintSubMode == PaintSubMode.Brush
+                         || _settings.PaintSubMode == PaintSubMode.Eraser;
+            _brushSizeLabel.SetEnabled(usesSize);
+            _brushSizeSlider.SetEnabled(usesSize);
+
+            _modeAddBtn.EnableInClassList("dennoko-button-active", _settings.AddMode);
+            _modeRemoveBtn.EnableInClassList("dennoko-button-active", !_settings.AddMode);
+        }
+
+        /// <summary>Undo/Redo button enabled states.</summary>
+        private void RefreshPaintToolbar()
+        {
+            if (_preview == null) return;
+            _undoBtn.SetEnabled(_maskPainter.HasUndo);
+            _redoBtn.SetEnabled(_maskPainter.HasRedo);
+        }
+
+        private void UpdateZoomLabel()
+        {
+            if (_zoomLabel == null || _preview == null) return;
+            _zoomLabel.text = $"{Mathf.RoundToInt(_preview.ZoomLevel * 100)}%";
+        }
+
+        private void RefreshPreviewBaseTexture()
+        {
+            _preview?.SetBaseTexture(_settings.PreviewOverlayBaseTex ? GetBaseTexture() : null);
+        }
+
+        private void SetPaintMode(bool paint)
+        {
+            if (_settings.IsPaintMode == paint) return;
+            _settings.IsPaintMode = paint;
+            _settingsManager.Save(_settings);
+            RefreshModeUI();
+        }
+
+        private void SetPaintSubMode(PaintSubMode mode)
+        {
+            if (_settings.PaintSubMode == mode) return;
+            _settings.PaintSubMode = mode;
+            _settingsManager.Save(_settings);
+            RefreshModeUI();
+        }
+
+        private void SetAddMode(bool add)
+        {
+            if (_settings.AddMode == add) return;
+            _settings.AddMode = add;
+            _settingsManager.Save(_settings);
+            RefreshModeUI();
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Status bar
+        // ─────────────────────────────────────────────────────────────────────
+
+        private void SetStatus(string message, StatusType type, long autoResetMs = 4000)
+        {
+            if (_statusLabel == null) return; // CreateGUI not yet run
+
+            _statusLabel.text = message;
+            _statusLabel.EnableInClassList("dennoko-status--success", type == StatusType.Success);
+            _statusLabel.EnableInClassList("dennoko-status--error",   type == StatusType.Error);
+
+            _statusResetSchedule?.Pause();
+            if (type != StatusType.Info)
+            {
+                _statusResetSchedule = _statusLabel.schedule
+                    .Execute(() => SetStatus(_localization.Get("status_ready", "Ready"), StatusType.Info))
+                    .StartingIn(autoResetMs);
+            }
         }
 
         // ─────────────────────────────────────────────────────────────────────
         // Hotkey
         // ─────────────────────────────────────────────────────────────────────
 
-        private void HandleHotkey()
+        private void OnRootKeyDown(KeyDownEvent e)
         {
-            var e = Event.current;
-            if (e != null && e.type == EventType.KeyDown
-                && e.keyCode == _settings.ModeToggleHotkey
-                && !EditorGUIUtility.editingTextField)
+            // Ignore while typing in a text input
+            if (e.target is TextElement || e.target is TextField) return;
+
+            if (e.keyCode == _settings.ModeToggleHotkey && _targetMesh != null)
             {
-                if (_targetMesh != null) { ToggleAddRemoveMode(null); e.Use(); }
+                ToggleAddRemoveMode(null);
+                e.StopPropagation();
             }
         }
 
@@ -697,15 +668,17 @@ namespace Dennoko.UVTools
             _targetTransform = null;
             _analysis        = null;
             _selectedIslands.Clear();
-            _previewDirty = true;
             _pickingService.Cleanup();
             _overlayRenderer.InvalidateCache();
-            _previewDrawer.InvalidateLabelMap();
+            _preview?.InvalidateLabelMap();
+            _preview?.SetContext(_analysis, _selectedIslands, _settings, _maskPainter);
+            _preview?.MarkDirty();
 
             if (_bakedMesh != null) { try { DestroyImmediate(_bakedMesh); } catch { } _bakedMesh = null; }
             if (_targetGO == null)
             {
                 SetStatus(_localization.Get("status_no_target", "ターゲットを設定してください"), StatusType.Info);
+                RefreshTargetDependentUI();
                 return;
             }
 
@@ -731,16 +704,15 @@ namespace Dennoko.UVTools
 
             if (_targetMesh == null)
             {
-                EditorUtility.DisplayDialog(
-                    _localization["dialog_no_mesh"],
-                    _localization["dialog_no_mesh_msg"],
-                    _localization["ok"]);
+                SetStatus(_localization["dialog_no_mesh_msg"], StatusType.Error);
+                RefreshTargetDependentUI();
                 return;
             }
 
             if (!TryFixReadWrite(_targetMesh))
             {
                 _targetGO = null; _targetRenderer = null; _targetMesh = null;
+                RefreshTargetDependentUI();
                 return;
             }
 
@@ -756,6 +728,7 @@ namespace Dennoko.UVTools
             AnalyzeTargetMesh();
             bool forceBakedPicking = (_targetRenderer is SkinnedMeshRenderer) && _bakedMesh != null;
             _pickingService.Initialize(_targetTransform, _targetMesh, _bakedMesh, forceBakedPicking || _settings.UseBakedMesh);
+            RefreshTargetDependentUI();
         }
 
         private void OnBakedMeshOptionChanged(bool useBaked)
@@ -772,10 +745,6 @@ namespace Dennoko.UVTools
         {
             if (_targetMesh == null)
             {
-                EditorUtility.DisplayDialog(
-                    _localization["dialog_no_target"],
-                    _localization["dialog_no_target_msg"],
-                    _localization["ok"]);
                 return;
             }
             try
@@ -807,11 +776,12 @@ namespace Dennoko.UVTools
         private void OnAnalysisSuccess()
         {
             _selectedIslands.Clear();
-            _previewDirty = true;
             _overlayRenderer.InvalidateCache();
-            _previewDrawer.InvalidateLabelMap();
+            _preview?.InvalidateLabelMap();
+            _preview?.SetContext(_analysis, _selectedIslands, _settings, _maskPainter);
+            _preview?.MarkDirty();
             BakeCurrentPoseAuto();
-            Repaint();
+            RefreshTargetDependentUI();
             string msg = string.Format(
                 _localization.Get("status_analyzed", "解析完了: {0} アイランド"),
                 _analysis.Islands.Count);
@@ -830,7 +800,7 @@ namespace Dennoko.UVTools
         {
             if (_targetRenderer == null || _isWorkCopy || _targetGO == null) return;
             _sourceTargetGO = _targetGO;
-            
+
             var copy = _workCopyService.CreateWorkCopy(_targetRenderer, _settings.WorkCopyOffset);
             if (copy != null)
             {
@@ -843,7 +813,7 @@ namespace Dennoko.UVTools
         {
             if (!_isWorkCopy || _targetGO == null) return;
             var original = _sourceTargetGO;
-            
+
             _suppressAutoWorkCopy = true;
             try
             {
@@ -863,20 +833,25 @@ namespace Dennoko.UVTools
             for (int i = 0; i < _analysis.Islands.Count; i++)
                 if (!_selectedIslands.Contains(i)) newSel.Add(i);
             _selectedIslands = newSel;
-            _previewDirty = true;
+            _preview?.SetSelection(_selectedIslands);
+            _preview?.MarkDirty();
+            SceneView.RepaintAll();
         }
 
         private void SelectAll()
         {
             if (_analysis == null) return;
             _selectedIslands = new HashSet<int>(Enumerable.Range(0, _analysis.Islands.Count));
-            _previewDirty = true;
+            _preview?.SetSelection(_selectedIslands);
+            _preview?.MarkDirty();
+            SceneView.RepaintAll();
         }
 
         private void ClearSelection()
         {
             _selectedIslands.Clear();
-            _previewDirty = true;
+            _preview?.MarkDirty();
+            SceneView.RepaintAll();
         }
 
         private void OnPreviewIslandClicked(int islandIdx)
@@ -884,16 +859,16 @@ namespace Dennoko.UVTools
             if (islandIdx < 0 || _analysis == null) return;
             if (_selectedIslands.Contains(islandIdx)) _selectedIslands.Remove(islandIdx);
             else _selectedIslands.Add(islandIdx);
-            _previewDirty = true;
-            Repaint();
+            _preview?.MarkDirty();
             SceneView.RepaintAll();
             Log($"[PreviewClick] island={islandIdx} TOGGLE → {(_selectedIslands.Contains(islandIdx) ? "SELECTED" : "DESELECTED")}");
         }
 
         private void OnPaintStrokeFinished()
         {
-            _settingsManager.Save(_settings); // save brush size or state if needed
-            Repaint();
+            _settingsManager.Save(_settings);
+            RefreshPaintToolbar();
+            SceneView.RepaintAll();
         }
 
         /// <summary>
@@ -936,12 +911,13 @@ namespace Dennoko.UVTools
                     mask[i] = 255;
             }
 
-            // _readable was created with new Texture2D (not an asset), DestroyImmediate is safe here.
+            // readable was created with new Texture2D (not an asset), DestroyImmediate is safe here.
             DestroyImmediate(readable);
 
             _maskPainter.MarkAllTilesDirty();
-            _previewDirty = true;
-            Repaint();
+            _preview?.MarkDirty();
+            RefreshPaintToolbar();
+            SceneView.RepaintAll();
 
             SetStatus(
                 _localization.Get("mask_import_done", "マスク画像を読み込みました"),
@@ -992,7 +968,7 @@ namespace Dennoko.UVTools
                 _settings.AddMode
                     ? _localization["notification_mode_add"]
                     : _localization["notification_mode_remove"]));
-            Repaint();
+            RefreshModeUI();
             SceneView.RepaintAll();
         }
 
@@ -1001,7 +977,8 @@ namespace Dennoko.UVTools
             _settings.UseEnglish = useEnglish;
             _settings.Language   = useEnglish ? "en" : "ja";
             _localization.LoadLanguage(_settings.Language);
-            Repaint(); SceneView.RepaintAll();
+            ApplyLocalization();
+            SceneView.RepaintAll();
         }
 
         private void SaveMaskPNG()
@@ -1026,7 +1003,7 @@ namespace Dennoko.UVTools
             if (!AssetDatabase.IsValidFolder(targetDir))
                 UVMaskExport.EnsureAssetFolderPath(targetDir);
 
-            string fileName = _exportDrawer.FileName;
+            string fileName = _exportBinder.FileName;
             if (string.IsNullOrEmpty(fileName)) fileName = "uv_mask";
             if (!fileName.EndsWith(".png")) fileName += ".png";
 
@@ -1131,7 +1108,7 @@ namespace Dennoko.UVTools
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        // Scene View
+        // Scene View (IMGUI — unchanged; not part of the window UI)
         // ─────────────────────────────────────────────────────────────────────
 
         private void OnSceneGUI(SceneView sv)
@@ -1147,11 +1124,10 @@ namespace Dennoko.UVTools
             {
                 _overlayRenderer.DrawSeams(_analysis, _targetTransform, _settings, _bakedMesh, _settings.UseBakedMesh);
 
-                // Replace wireframe island overlay with texture-based mask overlay.
-                // The overlay texture encodes both island selection and hand-painted regions,
-                // so the scene view always reflects the current state of the preview —
-                // including strokes from the hand-drawing tool.
-                var overlayTex = _previewDrawer.OverlayTexture;
+                // Texture-based mask overlay: encodes both island selection and
+                // hand-painted regions, so the scene view always reflects the
+                // current state of the preview.
+                var overlayTex = _preview?.OverlayTexture;
                 if (overlayTex != null)
                 {
                     _overlayRenderer.DrawMaskOverlay(
@@ -1168,8 +1144,7 @@ namespace Dennoko.UVTools
                     int islandIdx = pickedIsland.Value;
                     if (_settings.AddMode) _selectedIslands.Add(islandIdx);
                     else _selectedIslands.Remove(islandIdx);
-                    _previewDirty = true;
-                    Repaint();
+                    _preview?.MarkDirty();
                     sv.Repaint();
                     Log($"[Pick] island={islandIdx} {(_settings.AddMode ? "ADD" : "REMOVE")}");
                 }
