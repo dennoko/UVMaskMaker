@@ -1,6 +1,6 @@
 # MaskMaker Usage Guide (Unity 2022.3)
 
-This document explains how to use **MaskMaker** (`Tools > MaskMaker`). It is a tool that allows you to visually select UV islands of a mesh in the Unity Editor and export them as a mask image (PNG) or vertex colors.
+This document explains how to use **MaskMaker** (`dennokoworks > MaskMaker`). It is a tool that allows you to visually select UV islands of a mesh in the Unity Editor and export them as a mask image (PNG) or vertex colors.
 
 ---
 
@@ -12,6 +12,8 @@ This document explains how to use **MaskMaker** (`Tools > MaskMaker`). It is a t
 - **Work Copy Function**: Automatically creates a static working copy to prevent misalignment due to mesh deformation.
 - **Flexible Export**: Supports channel-specific writing (RGBA) and baking to vertex colors.
 - **Automated Import Settings**: Exported textures automatically have `Read/Write Enabled` and `Streaming Mipmaps` enabled.
+- **Pause Scene Picking**: Temporarily disable scene view island picking to return control back to default Unity operations.
+- **Automatic Update Check**: Automatically checks for the latest version on startup and displays an update notification in the header if available.
 
 ---
 
@@ -29,6 +31,7 @@ This document explains how to use **MaskMaker** (`Tools > MaskMaker`). It is a t
 1. Click the mesh in the Scene View or the `PREVIEW` area at the top of the window to select islands.
 2. Toggle between **Add** mode (add to selection) and **Remove** mode (deselect).
    - You can quickly switch modes with a hotkey (default `R`).
+   - Click the **Pause Scene Picking** button to temporarily disable MaskMaker's click detection on the scene view, allowing standard Unity selections and operations (e.g. using transform handles).
 3. Use the `Invert`, `Select All`, and `Clear` buttons for batch operations.
 4. **Paint Mode**: Select "Paint" in the toolbar below the preview to directly paint masks using various tools.
    - **Tool Types**:
@@ -72,6 +75,7 @@ This allows you to resume editing from a previously exported mask PNG instead of
 ### 2. Island Selection
 - **Add / Remove**: Switches the basic behavior upon clicking.
 - **Selection Count**: Displays the number of currently selected islands.
+- **Pause / Resume Scene Picking**: Temporarily disables clicking on the scene view to select islands, leaving clicks to default Unity operations (such as selecting other objects or using transform handles).
 - **Batch Action Buttons**:
   - **Invert**: Selects unselected islands and deselects selected ones.
   - **Select All**: Selects all islands.
@@ -135,6 +139,11 @@ Global tool settings.
 - **Language Mode**: Toggles between English and Japanese UI.
 - **Toggle Hotkey**: Key used for mode switching (default `R`).
 - **Auto Work Copy**: Toggles automatic creation of WorkCopy upon setting a target.
+
+### Version Info & Update Checks
+The tool version is displayed in the window header.
+- **Update Notification**: If a newer version is available on the remote server, an "Update available [Version]" message is shown next to the local version.
+- **Manual Check**: Click the refresh icon button (↻) to manually recheck for updates.
 
 ---
 
