@@ -107,6 +107,9 @@
                         <ui:Button name="select-all-btn" text="Select All" class="maskmaker-grow" />
                         <ui:Button name="clear-selection-btn" text="Clear" class="maskmaker-grow" />
                     </ui:VisualElement>
+                    <ui:VisualElement class="maskmaker-row">
+                        <ui:Button name="pause-pick-btn" text="Pause Scene Picking" class="maskmaker-grow" />
+                    </ui:VisualElement>
                 </ui:VisualElement>
 
 

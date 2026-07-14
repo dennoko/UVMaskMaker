@@ -59,6 +59,7 @@ namespace Dennoko.UVTools
         private Label  _selectionTitle;
         private Button _modeAddBtn, _modeRemoveBtn;
         private Button _invertBtn, _selectAllBtn, _clearSelectionBtn;
+        private Button _pausePickBtn;
 
         // ── UI: analysis-dependent buttons owned by binder sections ─────────
         private Button _savePngBtn, _bakeVcBtn;
@@ -383,15 +384,9 @@ namespace Dennoko.UVTools
             _redoBtn.clicked += () => { _maskPainter.Redo(); _preview.MarkDirty(); RefreshPaintToolbar(); };
             _clearPaintBtn.clicked += () =>
             {
-                if (EditorUtility.DisplayDialog(
-                    _localization.Get("tool_clear", "Clear"),
-                    _localization.Get("tool_clear_confirm", "Clear all paint?"),
-                    "OK", "Cancel"))
-                {
-                    _maskPainter.Clear();
-                    _preview.MarkDirty();
-                    RefreshPaintToolbar();
-                }
+                _maskPainter.Clear();
+                _preview.MarkDirty();
+                RefreshPaintToolbar();
             };
             _resetViewBtn.clicked += () => _preview.ResetView();
 
@@ -428,12 +423,14 @@ namespace Dennoko.UVTools
             _invertBtn         = root.Q<Button>("invert-btn");
             _selectAllBtn      = root.Q<Button>("select-all-btn");
             _clearSelectionBtn = root.Q<Button>("clear-selection-btn");
+            _pausePickBtn      = root.Q<Button>("pause-pick-btn");
 
             _modeAddBtn.clicked    += () => SetAddMode(true);
             _modeRemoveBtn.clicked += () => SetAddMode(false);
             _invertBtn.clicked         += InvertSelection;
             _selectAllBtn.clicked      += SelectAll;
             _clearSelectionBtn.clicked += ClearSelection;
+            _pausePickBtn.clicked      += ToggleScenePickPaused;
 
             // ── Analysis-dependent buttons (inside binder sections) ─────────
             _savePngBtn = root.Q<Button>("save-png-btn");
@@ -512,6 +509,7 @@ namespace Dennoko.UVTools
             _selectAllBtn.tooltip   = _localization["select_all_tooltip"];
             _clearSelectionBtn.text    = _localization["clear_selection"];
             _clearSelectionBtn.tooltip = _localization["clear_selection_tooltip"];
+            RefreshScenePickUI();
 
             _targetBinder.ApplyLocalization();
             _maskImportBinder.ApplyLocalization();
@@ -575,6 +573,39 @@ namespace Dennoko.UVTools
 
             _modeAddBtn.EnableInClassList("dennoko-button-active", _settings.AddMode);
             _modeRemoveBtn.EnableInClassList("dennoko-button-active", !_settings.AddMode);
+
+            RefreshScenePickUI();
+        }
+
+        /// <summary>
+        /// Pause button text/tooltip/active state. While paused the Add/Remove mode
+        /// buttons stay usable but scene view clicks are left to Unity.
+        /// </summary>
+        private void RefreshScenePickUI()
+        {
+            if (_pausePickBtn == null) return;
+
+            bool paused = _settings.ScenePickPaused;
+            _pausePickBtn.text = paused
+                ? _localization.Get("scene_pick_resume", "シーン選択を再開")
+                : _localization.Get("scene_pick_pause",  "シーン選択を一時停止");
+            _pausePickBtn.tooltip = _localization.Get(
+                "scene_pick_pause_tooltip",
+                "一時停止中はシーンビューのクリックを奪わず、Unity 標準の選択・操作が行えます。");
+            _pausePickBtn.EnableInClassList("dennoko-button-active", paused);
+        }
+
+        private void ToggleScenePickPaused()
+        {
+            _settings.ScenePickPaused = !_settings.ScenePickPaused;
+            _settingsManager.Save(_settings);
+            RefreshScenePickUI();
+            SetStatus(
+                _settings.ScenePickPaused
+                    ? _localization.Get("status_scene_pick_paused", "シーン選択を一時停止中（Unity の操作が可能）")
+                    : _localization.Get("status_scene_pick_resumed", "シーン選択を再開しました"),
+                StatusType.Info);
+            SceneView.RepaintAll();
         }
 
         /// <summary>Undo/Redo button enabled states.</summary>
@@ -1139,7 +1170,11 @@ namespace Dennoko.UVTools
         private void OnSceneGUI(SceneView sv)
         {
             var e = Event.current;
-            if (e.type == EventType.KeyDown && e.keyCode == _settings.ModeToggleHotkey
+
+            // 一時停止中はシーンビューの入力を一切奪わず、Unity 標準の操作に委ねる
+            bool paused = _settings.ScenePickPaused;
+
+            if (!paused && e.type == EventType.KeyDown && e.keyCode == _settings.ModeToggleHotkey
                 && !EditorGUIUtility.editingTextField)
             {
                 if (_targetMesh != null) { ToggleAddRemoveMode(sv); e.Use(); }
@@ -1161,7 +1196,8 @@ namespace Dennoko.UVTools
                 }
             }
 
-            if (_analysis != null && e.type == EventType.MouseDown && e.button == 0)
+            if (_analysis != null && !paused
+                && e.type == EventType.MouseDown && e.button == 0)
             {
                 var pickedIsland = _pickingService.TryPick(e.mousePosition, _analysis);
                 if (pickedIsland.HasValue)

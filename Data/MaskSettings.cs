@@ -34,6 +34,8 @@ namespace Dennoko.UVTools.Data
         // Mode settings
         public bool AddMode = true;
         public bool IsPaintMode = false;
+        // シーンビューのクリック判定を一時停止する (true の間は Unity 標準の選択操作が行える)
+        public bool ScenePickPaused = false;
         public PaintSubMode PaintSubMode = PaintSubMode.Brush;
         public int BrushSize = 50;
         public KeyCode ModeToggleHotkey = KeyCode.R;
