@@ -209,3 +209,11 @@
 .dennoko-root .dennoko-version-reload-button:hover {
     color: var(--dennoko-text-primary);
 }
+
+/* ─── 対象モデル設定セクションの余白調整 ─────────────────── */
+
+/* 最初のカードが上部境界と密着するのを防ぐため、上マージンを追加 */
+.dennoko-root #target-card {
+    margin-top: 10px;
+}
+
