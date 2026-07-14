@@ -122,14 +122,21 @@
     color: var(--dennoko-text-primary);
 }
 
-/* Toggle ボタン型のアクティブ状態用 (ON/OFF 切り替えボタン等) */
+/* Toggle ボタン型のアクティブ状態用 (ON/OFF 切り替えボタン等)
+   背景色だけでは選択中が判別しづらいため、枠線を info の青にして明示する。 */
 .dennoko-root .unity-button.dennoko-button-active {
     background-color: var(--dennoko-surface-2);
+    border-color: var(--dennoko-semantic-info);
+    border-width: 1px;
     color: var(--dennoko-text-primary);
     -unity-font-style: bold;
 }
 .dennoko-root .unity-button.dennoko-button-active:hover {
     background-color: var(--dennoko-outline);
+    border-color: var(--dennoko-semantic-info);
+}
+.dennoko-root .unity-button.dennoko-button-active:active {
+    border-color: var(--dennoko-semantic-info);
 }
 
 /* ─── ③ 入力フィールドのリセット ─────────────────────────
