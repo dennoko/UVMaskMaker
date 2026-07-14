@@ -14,7 +14,7 @@
     <ui:TwoPaneSplitView orientation="Vertical" fixed-pane-index="0" fixed-pane-initial-dimension="280">
 
         <!-- ══ Zone 1: プレビュー ══════════════════════════════════ -->
-        <ui:VisualElement name="preview-zone" style="min-height: 80px;">
+        <ui:VisualElement name="preview-zone" class="maskmaker-preview-zone">
 
             <!-- プレビューツールバー -->
             <ui:VisualElement class="dennoko-toolbar maskmaker-preview-toolbar">
@@ -48,7 +48,7 @@
         </ui:VisualElement>
 
         <!-- ══ Zone 2: 設定 (スクロール) ═══════════════════════════ -->
-        <ui:VisualElement name="settings-zone" style="min-height: 50px;">
+        <ui:VisualElement name="settings-zone" class="maskmaker-settings-zone">
             <ui:ScrollView class="dennoko-scroll">
 
                 <!-- STEP 1: Target -->
@@ -98,9 +98,9 @@
                 <ui:VisualElement name="selection-card" class="dennoko-card">
                     <ui:Label name="selection-title" text="ISLAND SELECTION"
                         class="dennoko-section-title dennoko-card-header" />
-                    <ui:VisualElement class="maskmaker-row" style="justify-content: center;">
-                        <ui:Button name="mode-add-btn" text="Add" style="width: 100px;" />
-                        <ui:Button name="mode-remove-btn" text="Remove" style="width: 100px;" />
+                    <ui:VisualElement class="maskmaker-row maskmaker-row--center">
+                        <ui:Button name="mode-add-btn" text="Add" class="maskmaker-mode-btn" />
+                        <ui:Button name="mode-remove-btn" text="Remove" class="maskmaker-mode-btn" />
                     </ui:VisualElement>
                     <ui:VisualElement class="maskmaker-row">
                         <ui:Button name="invert-btn" text="Invert" class="maskmaker-grow" />
@@ -140,7 +140,7 @@
                             type="UnityEngine.Texture2D, UnityEngine.CoreModule" />
                         <ui:VisualElement class="maskmaker-row">
                             <ui:Label name="write-channels-label" text="Write Channels"
-                                style="min-width: 110px;" />
+                                class="maskmaker-inline-label" />
                             <ui:Toggle name="write-r-toggle" label="R" class="maskmaker-channel-toggle" />
                             <ui:Toggle name="write-g-toggle" label="G" class="maskmaker-channel-toggle" />
                             <ui:Toggle name="write-b-toggle" label="B" class="maskmaker-channel-toggle" />
@@ -177,8 +177,10 @@
                 <ui:Label name="export-title" text="QUICK EXPORT"
                     class="dennoko-section-title dennoko-card-header" />
                 <ui:VisualElement class="maskmaker-row">
-                    <ui:DropdownField name="resolution-dropdown" label="Resolution" />
-                    <ui:Toggle name="invert-mask-toggle" label="Invert Mask" />
+                    <ui:DropdownField name="resolution-dropdown" label="Resolution"
+                        class="maskmaker-grow" />
+                    <ui:Toggle name="invert-mask-toggle" label="Invert Mask"
+                        class="maskmaker-inline-toggle" />
                 </ui:VisualElement>
                 <ui:SliderInt name="pixel-margin-slider" label="Pixel Margin"
                     low-value="0" high-value="16" show-input-field="true" />

@@ -68,9 +68,58 @@
     flex-grow: 1;
 }
 
-/* row 内で幅いっぱいに広げるフィールド */
+/* row 内で幅いっぱいに広げるフィールド。
+   ⚠ flex-grow だけでは、フィールド内部の内容幅 (ObjectField のオブジェクト名等) が
+   行幅を超えたときに縮まず、右へはみ出す。min-width: 0 と flex-shrink: 1 を併記して
+   「内容幅より小さくなれる」ようにする。 */
 .dennoko-root .maskmaker-grow {
     flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+}
+
+/* row 内フィールドの入力部も同様に縮小可能にし、あふれた表示はクリップする */
+.dennoko-root .maskmaker-row .unity-base-field__input {
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+/* 長いオブジェクト名でフィールド幅が押し広げられないよう省略表示にする */
+.dennoko-root .unity-object-field-display__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* row 内のボタン (Clear / ... ) は縮小させず、はみ出しはフィールド側で吸収する */
+.dennoko-root .maskmaker-row > .unity-button {
+    flex-shrink: 0;
+}
+
+/* 中央寄せの row (モード切替ボタン等) */
+.dennoko-root .maskmaker-row--center {
+    justify-content: center;
+}
+
+/* row 内に直接置くラベル (Write Channels 等)。カード内フィールドのラベル幅に揃える */
+.dennoko-root .maskmaker-inline-label {
+    min-width: 110px;
+    flex-shrink: 0;
+}
+
+/* 幅を固定するモード切替ボタン (Add / Remove) */
+.dennoko-root .unity-button.maskmaker-mode-btn {
+    width: 100px;
+}
+
+/* ─── スプリットビューの各ゾーン ─────────────────────────── */
+
+.dennoko-root .maskmaker-preview-zone {
+    min-height: 80px;
+}
+
+.dennoko-root .maskmaker-settings-zone {
+    min-height: 50px;
 }
 
 /* ─── ドラッグ&ドロップ領域 ─────────────────────────────── */
@@ -104,6 +153,19 @@
 .dennoko-root .maskmaker-channel-toggle .unity-base-field__label {
     min-width: 20px;
     flex-basis: 20px;
+}
+
+/* row 内でフィールドと横並びにするトグル (Invert Mask 等)。
+   カード規則のラベル幅 110px を持たせるとフィールドと合わせて行幅を超えるため、
+   ラベルはテキスト分の幅だけにし、自身は縮ませない */
+.dennoko-root .maskmaker-inline-toggle {
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+.dennoko-root .maskmaker-inline-toggle .unity-base-field__label {
+    min-width: 0;
+    flex-basis: auto;
 }
 
 /* ─── スプリッター (TwoPaneSplitView) ────────────────────── */
