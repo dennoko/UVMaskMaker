@@ -71,13 +71,45 @@ namespace Dennoko.UVTools.Core
         }
 
         /// <summary>
+        /// Builds the island mask with the pixel margin already applied.
+        /// The margin is deliberately applied before any hand-painted strokes are merged in,
+        /// so painted strokes keep exactly the extent the user drew.
+        /// </summary>
+        public static byte[] BuildIslandMaskWithMargin(
+            UVAnalysis analysis,
+            HashSet<int> selectedIslands,
+            int width,
+            int height,
+            int pixelMargin)
+        {
+            var mask = BuildUnionMask(analysis, selectedIslands, width, height);
+            if (pixelMargin > 0)
+            {
+                DilateMask(mask, width, height, pixelMargin);
+            }
+            return mask;
+        }
+
+        /// <summary>
+        /// Merges the hand-painted layer into the mask (painted pixels become selected).
+        /// </summary>
+        public static void ApplyPaintMask(byte[] mask, byte[] paintMask)
+        {
+            if (mask == null || paintMask == null || paintMask.Length != mask.Length) return;
+            for (int i = 0; i < mask.Length; i++)
+            {
+                if (paintMask[i] > 0) mask[i] = 255;
+            }
+        }
+
+        /// <summary>
         /// Builds complete mask with all processing steps applied.
         /// </summary>
         /// <param name="analysis">UV analysis result</param>
         /// <param name="selectedIslands">Set of selected island indices</param>
         /// <param name="width">Output mask width</param>
         /// <param name="height">Output mask height</param>
-        /// <param name="pixelMargin">Number of pixels to dilate</param>
+        /// <param name="pixelMargin">Number of pixels to dilate the island mask by (hand-painted strokes are not dilated)</param>
         /// <param name="invertMask">Whether to invert the mask</param>
         /// <returns>Processed byte mask</returns>
         public static byte[] BuildProcessedMask(
@@ -89,34 +121,24 @@ namespace Dennoko.UVTools.Core
             bool invertMask,
             byte[] paintMask = null)
         {
-            var mask = BuildUnionMask(analysis, selectedIslands, width, height);
+            var mask = BuildIslandMaskWithMargin(analysis, selectedIslands, width, height, pixelMargin);
+            return ComposeFinalMask(mask, paintMask, invertMask);
+        }
 
-            if (paintMask != null && paintMask.Length == mask.Length)
-            {
-                for (int i = 0; i < mask.Length; i++)
-                {
-                    if (paintMask[i] > 0) mask[i] = 255;
-                }
-            }
+        /// <summary>
+        /// Merges the paint layer into an already-dilated island mask and applies inversion.
+        /// </summary>
+        /// <param name="islandMask">Island mask with the pixel margin already applied (modified in place)</param>
+        public static byte[] ComposeFinalMask(byte[] islandMask, byte[] paintMask, bool invertMask)
+        {
+            ApplyPaintMask(islandMask, paintMask);
 
             if (invertMask)
             {
-                InvertMask(mask);
+                InvertMask(islandMask);
             }
 
-            if (pixelMargin > 0)
-            {
-                if (invertMask)
-                {
-                    DilateWhite(mask, width, height, pixelMargin);
-                }
-                else
-                {
-                    DilateMask(mask, width, height, pixelMargin);
-                }
-            }
-
-            return mask;
+            return islandMask;
         }
 
         /// <summary>

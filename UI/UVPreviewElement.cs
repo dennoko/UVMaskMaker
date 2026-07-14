@@ -650,7 +650,7 @@ namespace Dennoko.UVTools.UI
         }
 
         /// <summary>
-        /// Full regeneration: rebuilds island mask from scratch, applies paint, invert, dilate.
+        /// Full regeneration: rebuilds island mask from scratch, dilates it, then applies paint and invert.
         /// Called when selection/settings change or on stroke finish.
         /// </summary>
         private void RegenerateTexturesFull(UVAnalysis analysis, HashSet<int> selectedIslands, MaskSettings settings, MaskPainter painter)
@@ -658,12 +658,16 @@ namespace Dennoko.UVTools.UI
             int size = settings.TextureSize;
             if (painter != null) painter.EnsureSize(size);
 
-            // Build and cache island mask
-            _cachedIslandMask = MaskBuilder.BuildUnionMask(analysis, selectedIslands, size, size);
+            // Build and cache the island mask with the pixel margin already applied.
+            // The margin never touches hand-painted strokes, so the incremental paint path
+            // can simply OR the paint layer on top of this cache.
+            _cachedIslandMask = MaskBuilder.BuildIslandMaskWithMargin(
+                analysis, selectedIslands, size, size, settings.PixelMargin);
 
-            // Build full processed mask (merge paint + invert + dilate)
-            var mask = MaskBuilder.BuildProcessedMask(analysis, selectedIslands, size, size,
-                settings.PixelMargin, settings.InvertMask, painter?.Mask);
+            // Working copy: merge paint + invert
+            var mask = new byte[_cachedIslandMask.Length];
+            Array.Copy(_cachedIslandMask, mask, mask.Length);
+            MaskBuilder.ComposeFinalMask(mask, painter?.Mask, settings.InvertMask);
 
             // Ensure pixel buffers
             int pixelCount = size * size;
@@ -699,8 +703,8 @@ namespace Dennoko.UVTools.UI
 
         /// <summary>
         /// Incremental update: only recomputes pixels in dirty tiles, then uploads both textures.
-        /// Skips Invert/Dilate for speed — those are applied on stroke finish via full regen.
-        /// Uses cached island mask + paint mask merged directly.
+        /// Skips Invert for speed — it is applied on stroke finish via full regen.
+        /// Uses the cached (already dilated) island mask + paint mask merged directly.
         /// </summary>
         private void RegeneratePaintIncremental(MaskSettings settings, MaskPainter painter)
         {
