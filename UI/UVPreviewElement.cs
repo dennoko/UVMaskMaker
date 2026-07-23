@@ -57,6 +57,11 @@ namespace Dennoko.UVTools.UI
         private static readonly Color RectFillColor = new Color(0.3f, 0.7f, 1f, 0.25f);
         private static readonly Color LassoCloseColor = new Color(1f, 1f, 0f, 0.5f);
 
+        // Max border edges per Painter2D stroke batch. Each edge (MoveTo+LineTo,
+        // width 1) tessellates to a handful of vertices; 6000 keeps every batch's
+        // mesh comfortably under the 65535-vertex limit.
+        private const int BorderEdgesPerBatch = 6000;
+
         // --- Events ---
         /// <summary>Fired when an island is clicked in the preview. -1 = empty area.</summary>
         public event Action<int> OnIslandClicked;
@@ -485,11 +490,19 @@ namespace Dennoko.UVTools.UI
 
             var p = mgc.painter2D;
 
-            // UV island boundary lines
+            // UV island boundary lines.
+            // A single Painter2D stroke is tessellated into one mesh, and a mesh
+            // cannot exceed 65535 vertices. Dense meshes can have tens of thousands
+            // of border edges, so we flush the path every BorderEdgesPerBatch edges.
+            // Otherwise the overflow throws inside generateVisualContent and Unity
+            // discards the whole element's mesh — including the texture quad, which
+            // makes the entire preview vanish.
             if (_settings.ShowIslandPreview && _analysis.BorderEdges != null && _analysis.BorderEdges.Count > 0)
             {
                 p.strokeColor = IslandBorderColor;
                 p.lineWidth = 1f;
+
+                int batch = 0;
                 p.BeginPath();
                 foreach (var be in _analysis.BorderEdges)
                 {
@@ -499,8 +512,15 @@ namespace Dennoko.UVTools.UI
                     float by = Mathf.Lerp(_lastImgRect.yMax, _lastImgRect.y, Mathf.Clamp01(be.uv1.y));
                     p.MoveTo(new Vector2(ax, ay));
                     p.LineTo(new Vector2(bx, by));
+
+                    if (++batch >= BorderEdgesPerBatch)
+                    {
+                        p.Stroke();
+                        p.BeginPath();
+                        batch = 0;
+                    }
                 }
-                p.Stroke();
+                if (batch > 0) p.Stroke();
             }
 
             // Rectangle selection preview
