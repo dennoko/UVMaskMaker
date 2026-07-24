@@ -132,7 +132,7 @@ namespace Dennoko.UVTools
                 _uiFontAsset = UnityEngine.TextCore.Text.FontAsset.CreateFontAsset(UI_FONT_FAMILY, "Regular");
                 if (_uiFontAsset != null)
                 {
-                    _uiFontAsset.hideFlags = HideFlags.HideAndDontSave;
+                    MarkFontAssetDontSave(_uiFontAsset);
                 }
             }
             catch
@@ -140,6 +140,36 @@ namespace Dennoko.UVTools
                 _uiFontAsset = null;
             }
             return _uiFontAsset;
+        }
+
+        /// <summary>
+        /// 動的生成した FontAsset とその内部オブジェクト（アトラス用 material / atlasTextures）に
+        /// HideAndDontSave を伝播させる。
+        ///
+        /// FontAsset.CreateFontAsset で実行時に生成されるフォントアトラスの material と Texture2D は
+        /// FontAsset 本体とは別の UnityEngine.Object であり、hideFlags は自動では伝播しない。
+        /// これらを放置すると「どのアセットからも参照されない一時オブジェクト」と見なされ、
+        /// Resources.UnloadUnusedAssets()（PNG エクスポート後の AssetDatabase.Refresh、プレイモード
+        /// 遷移、シーン保存などで暗黙的に呼ばれる）で破棄される。すると FontAsset は破棄済み material を
+        /// 参照し続け、次のテキスト描画で Material.get_mainTexture が MissingReferenceException を投げ、
+        /// UI のテキストが崩れる。material/atlasTextures にも DontSave を付けて破棄を防ぐ。
+        /// </summary>
+        private static void MarkFontAssetDontSave(UnityEngine.TextCore.Text.FontAsset fontAsset)
+        {
+            fontAsset.hideFlags = HideFlags.HideAndDontSave;
+
+            if (fontAsset.material != null)
+                fontAsset.material.hideFlags = HideFlags.HideAndDontSave;
+
+            var atlasTextures = fontAsset.atlasTextures;
+            if (atlasTextures != null)
+            {
+                foreach (var tex in atlasTextures)
+                {
+                    if (tex != null)
+                        tex.hideFlags = HideFlags.HideAndDontSave;
+                }
+            }
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -242,7 +272,7 @@ namespace Dennoko.UVTools
             _advancedBinder.OnSelectedColorChanged      += c => { _settings.SelectedSceneColor     = c; _settingsManager.Save(_settings); SceneView.RepaintAll(); };
             _advancedBinder.OnPreviewFillColorChanged   += c => { _settings.PreviewFillSelectedColor = c; _settingsManager.Save(_settings); _preview?.MarkDirty(); };
             _advancedBinder.OnOverlayAlphaChanged       += v => { _settings.PreviewOverlayAlpha    = v; _settingsManager.Save(_settings); _preview?.MarkDirty(); };
-            _advancedBinder.OnShowIslandPreviewChanged  += v => { _settings.ShowIslandPreview      = v; _settingsManager.Save(_settings); _preview?.MarkDirtyRepaint(); };
+            _advancedBinder.OnShowIslandPreviewChanged  += v => { _settings.ShowIslandPreview      = v; _settingsManager.Save(_settings); _preview?.RefreshBorderOverlay(); };
             _advancedBinder.OnPreviewOverlayBaseChanged += v => { _settings.PreviewOverlayBaseTex  = v; _settingsManager.Save(_settings); RefreshPreviewBaseTexture(); };
             _advancedBinder.OnChannelWriteEnabledChanged += v => { _settings.ChannelWriteEnabled   = v; _settingsManager.Save(_settings); };
             _advancedBinder.OnBasePNGChanged            += tex => { _basePNG = tex; _settingsManager.SetBasePNGPath(tex ? AssetDatabase.GetAssetPath(tex) : ""); };

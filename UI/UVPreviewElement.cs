@@ -57,10 +57,16 @@ namespace Dennoko.UVTools.UI
         private static readonly Color RectFillColor = new Color(0.3f, 0.7f, 1f, 0.25f);
         private static readonly Color LassoCloseColor = new Color(1f, 1f, 0f, 0.5f);
 
-        // Max border edges per Painter2D stroke batch. Each edge (MoveTo+LineTo,
-        // width 1) tessellates to a handful of vertices; 6000 keeps every batch's
-        // mesh comfortably under the 65535-vertex limit.
-        private const int BorderEdgesPerBatch = 6000;
+        // Border edges are rendered in dedicated child "layers" (see UpdateBorderLayers).
+        // UI Toolkit's 65535-vertex cap is PER VisualElement and applies to the CUMULATIVE
+        // geometry generated for that element, so flushing Painter2D strokes within a single
+        // element does NOT avoid it — dense meshes produce far more than 65535 border-line
+        // vertices. Unity's recommended workaround is to distribute the geometry across
+        // multiple VisualElements; each layer draws at most MaxEdgesPerLayer edges.
+        // Each edge is one MoveTo+LineTo (width 1) tessellating to a handful of vertices;
+        // 6000 edges keeps a single layer's mesh comfortably under 65535.
+        private const int MaxEdgesPerLayer = 6000;
+        private readonly List<BorderLayer> _borderLayers = new List<BorderLayer>();
 
         // --- Events ---
         /// <summary>Fired when an island is clicked in the preview. -1 = empty area.</summary>
@@ -121,7 +127,7 @@ namespace Dennoko.UVTools.UI
             RegisterCallback<PointerUpEvent>(OnPointerUp);
             RegisterCallback<PointerCaptureOutEvent>(OnPointerCaptureOut);
             RegisterCallback<DetachFromPanelEvent>(_ => Dispose());
-            RegisterCallback<GeometryChangedEvent>(_ => MarkDirtyRepaint());
+            RegisterCallback<GeometryChangedEvent>(_ => { MarkDirtyRepaint(); UpdateBorderLayers(); });
         }
 
         /// <summary>
@@ -137,6 +143,7 @@ namespace Dennoko.UVTools.UI
             _settings = settings;
             _painter = painter;
             UpdateHintVisibility();
+            UpdateBorderLayers();
             MarkDirtyRepaint();
         }
 
@@ -165,6 +172,7 @@ namespace Dennoko.UVTools.UI
             _dirty = true;
             _cachedIslandMask = null; // Invalidate island cache
             UpdateHintVisibility();
+            UpdateBorderLayers();
             MarkDirtyRepaint();
         }
 
@@ -174,6 +182,7 @@ namespace Dennoko.UVTools.UI
             _zoomLevel = 1f;
             _panOffset = Vector2.zero;
             MarkDirtyRepaint();
+            RepaintBorderLayers();
             OnViewChanged?.Invoke();
         }
 
@@ -268,6 +277,7 @@ namespace Dennoko.UVTools.UI
 
             e.StopPropagation();
             MarkDirtyRepaint();
+            RepaintBorderLayers();
             OnViewChanged?.Invoke();
         }
 
@@ -345,6 +355,7 @@ namespace Dennoko.UVTools.UI
                 _panOffset += (Vector2)e.deltaPosition;
                 e.StopPropagation();
                 MarkDirtyRepaint();
+                RepaintBorderLayers();
                 OnViewChanged?.Invoke();
                 return;
             }
@@ -490,38 +501,10 @@ namespace Dennoko.UVTools.UI
 
             var p = mgc.painter2D;
 
-            // UV island boundary lines.
-            // A single Painter2D stroke is tessellated into one mesh, and a mesh
-            // cannot exceed 65535 vertices. Dense meshes can have tens of thousands
-            // of border edges, so we flush the path every BorderEdgesPerBatch edges.
-            // Otherwise the overflow throws inside generateVisualContent and Unity
-            // discards the whole element's mesh — including the texture quad, which
-            // makes the entire preview vanish.
-            if (_settings.ShowIslandPreview && _analysis.BorderEdges != null && _analysis.BorderEdges.Count > 0)
-            {
-                p.strokeColor = IslandBorderColor;
-                p.lineWidth = 1f;
-
-                int batch = 0;
-                p.BeginPath();
-                foreach (var be in _analysis.BorderEdges)
-                {
-                    float ax = Mathf.Lerp(_lastImgRect.x, _lastImgRect.xMax, Mathf.Clamp01(be.uv0.x));
-                    float ay = Mathf.Lerp(_lastImgRect.yMax, _lastImgRect.y, Mathf.Clamp01(be.uv0.y));
-                    float bx = Mathf.Lerp(_lastImgRect.x, _lastImgRect.xMax, Mathf.Clamp01(be.uv1.x));
-                    float by = Mathf.Lerp(_lastImgRect.yMax, _lastImgRect.y, Mathf.Clamp01(be.uv1.y));
-                    p.MoveTo(new Vector2(ax, ay));
-                    p.LineTo(new Vector2(bx, by));
-
-                    if (++batch >= BorderEdgesPerBatch)
-                    {
-                        p.Stroke();
-                        p.BeginPath();
-                        batch = 0;
-                    }
-                }
-                if (batch > 0) p.Stroke();
-            }
+            // UV island boundary lines are drawn in child BorderLayer elements
+            // (see UpdateBorderLayers / DrawBorderEdgeRange), NOT here, because a
+            // dense mesh's border geometry exceeds UI Toolkit's per-VisualElement
+            // 65535-vertex cap and must be spread across multiple elements.
 
             // Rectangle selection preview
             if (_isRectPainting)
@@ -624,6 +607,143 @@ namespace Dennoko.UVTools.UI
                 p.MoveTo(new Vector2(ax, ay));
                 p.LineTo(new Vector2(bx, by));
                 p.Stroke();
+            }
+        }
+
+        // ────────────────────────────────────────────────────────────────────
+        // Island border overlay (distributed across child VisualElements)
+        // ────────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Ensures the pool of child <see cref="BorderLayer"/> elements matches the
+        /// current border-edge count and assigns each layer its edge range, then
+        /// requests a repaint. Called when the analysis, border visibility, or size
+        /// changes. Splitting the border lines across multiple elements is required
+        /// because UI Toolkit's 65535-vertex cap is per VisualElement.
+        /// </summary>
+        private void UpdateBorderLayers()
+        {
+            int edgeCount = 0;
+            bool show = _analysis != null && _settings != null && _settings.ShowIslandPreview
+                        && _analysis.BorderEdges != null;
+            if (show) edgeCount = _analysis.BorderEdges.Count;
+
+            int needed = (edgeCount + MaxEdgesPerLayer - 1) / MaxEdgesPerLayer;
+
+            // Grow the pool as needed (layers are reused/hidden, never destroyed, to
+            // avoid hierarchy churn when the edge count fluctuates).
+            while (_borderLayers.Count < needed)
+            {
+                var layer = new BorderLayer(this);
+                _borderLayers.Add(layer);
+                Add(layer);
+            }
+
+            for (int i = 0; i < _borderLayers.Count; i++)
+            {
+                var layer = _borderLayers[i];
+                if (i < needed)
+                {
+                    int start = i * MaxEdgesPerLayer;
+                    int end = Mathf.Min(start + MaxEdgesPerLayer, edgeCount);
+                    layer.SetRange(start, end);
+                    layer.style.display = DisplayStyle.Flex;
+                    layer.MarkDirtyRepaint();
+                }
+                else if (layer.style.display != DisplayStyle.None)
+                {
+                    layer.style.display = DisplayStyle.None;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Requests a repaint of the currently visible border layers without changing
+        /// the pool (used on view changes — zoom/pan — where only the transform moved).
+        /// </summary>
+        private void RepaintBorderLayers()
+        {
+            for (int i = 0; i < _borderLayers.Count; i++)
+            {
+                var layer = _borderLayers[i];
+                if (layer.style.display != DisplayStyle.None)
+                    layer.MarkDirtyRepaint();
+            }
+        }
+
+        /// <summary>
+        /// Refreshes the island border overlay. Call when the "Show Island Borders"
+        /// setting toggles.
+        /// </summary>
+        public void RefreshBorderOverlay()
+        {
+            UpdateBorderLayers();
+            MarkDirtyRepaint();
+        }
+
+        /// <summary>
+        /// Draws a slice of the island border edges (indices [startEdge, endEdge))
+        /// into <paramref name="mgc"/>. Invoked by a child <see cref="BorderLayer"/>;
+        /// the coordinates are computed from this (parent) element's view transform,
+        /// which is valid because each layer exactly overlays the parent's content box.
+        /// </summary>
+        internal void DrawBorderEdgeRange(MeshGenerationContext mgc, int startEdge, int endEdge)
+        {
+            if (_analysis == null || _settings == null || !_settings.ShowIslandPreview) return;
+            var edges = _analysis.BorderEdges;
+            if (edges == null) return;
+
+            int count = edges.Count;
+            if (startEdge < 0) startEdge = 0;
+            if (endEdge > count) endEdge = count;
+            if (startEdge >= endEdge) return;
+
+            Rect r = ComputeImgRect();
+            var p = mgc.painter2D;
+            p.strokeColor = IslandBorderColor;
+            p.lineWidth = 1f;
+            p.BeginPath();
+            for (int i = startEdge; i < endEdge; i++)
+            {
+                var be = edges[i];
+                float ax = Mathf.Lerp(r.x, r.xMax, Mathf.Clamp01(be.uv0.x));
+                float ay = Mathf.Lerp(r.yMax, r.y, Mathf.Clamp01(be.uv0.y));
+                float bx = Mathf.Lerp(r.x, r.xMax, Mathf.Clamp01(be.uv1.x));
+                float by = Mathf.Lerp(r.yMax, r.y, Mathf.Clamp01(be.uv1.y));
+                p.MoveTo(new Vector2(ax, ay));
+                p.LineTo(new Vector2(bx, by));
+            }
+            p.Stroke();
+        }
+
+        /// <summary>
+        /// A transparent child element that renders one slice of the island border
+        /// lines. Exists solely to keep each element's Painter2D vertex count under
+        /// UI Toolkit's 65535-per-element cap. It overlays the parent's content box
+        /// (absolute, full-size) so it shares the parent's coordinate space and clip.
+        /// </summary>
+        private sealed class BorderLayer : VisualElement
+        {
+            private readonly UVPreviewElement _owner;
+            private int _startEdge;
+            private int _endEdge;
+
+            public BorderLayer(UVPreviewElement owner)
+            {
+                _owner = owner;
+                pickingMode = PickingMode.Ignore;
+                style.position = Position.Absolute;
+                style.left = 0f;
+                style.top = 0f;
+                style.right = 0f;
+                style.bottom = 0f;
+                generateVisualContent += mgc => _owner.DrawBorderEdgeRange(mgc, _startEdge, _endEdge);
+            }
+
+            public void SetRange(int startEdge, int endEdge)
+            {
+                _startEdge = startEdge;
+                _endEdge = endEdge;
             }
         }
 
