@@ -123,7 +123,10 @@
 }
 
 /* Toggle ボタン型のアクティブ状態用 (ON/OFF 切り替えボタン等)
-   背景色だけでは選択中が判別しづらいため、枠線を info の青にして明示する。 */
+   サーフェス間の明度差だけでは選択中がひと目で分からないため、枠線を info の青
+   (--dennoko-semantic-info) にして「選択中」を明示する。
+   :hover / :active でも青枠を維持する (維持しないと汎用の .unity-button:active が
+   accent の白枠で上書きしてしまう)。 */
 .dennoko-root .unity-button.dennoko-button-active {
     background-color: var(--dennoko-surface-2);
     border-color: var(--dennoko-semantic-info);
@@ -204,6 +207,35 @@
    箱込み画像は破棄して中の背景を白 (accent) に固定し、
    チェックマークにはグリフのみのビルトインアイコンを明示指定する。 */
 
+/* Toggle の入力コンテナ (.unity-toggle__input) は .unity-base-field__input でも
+   あるため、③の入力フィールド装飾がそのまま乗り、チェックボックス + ラベル全体が
+   入力欄のような箱で囲まれてしまう。
+   ⚠ トグルは「入力欄」ではなくテキスト行として見せる。囲みは付けない。
+   :hover / :focus も併記するのは、③の疑似クラス付きセレクタ (0,4,0) のほうが
+   詳細度が高く、素の打ち消し (0,3,0) だけではホバー時に負けるため。 */
+.dennoko-root .unity-toggle .unity-base-field__input,
+.dennoko-root .unity-toggle:hover .unity-base-field__input,
+.dennoko-root .unity-toggle:focus .unity-base-field__input,
+.dennoko-root .unity-toggle .unity-base-field__input:focus {
+    background-color: transparent;
+    border-color: transparent;
+    border-width: 0;
+    padding: 0;
+}
+
+/* Toggle の text は .unity-base-field__input の「内側」に Label として生成される。
+   ⚠ ③で内側のテキスト要素にボックススタイル (背景・枠・角丸・パディング) を
+   足すと、ラベル文字が箱で囲まれる。③は color のみに留めること。
+   ここでは念のため打ち消しつつ、チェックボックスとの間隔だけを与える。 */
+.dennoko-root .unity-toggle .unity-toggle__text {
+    background-color: transparent;
+    border-color: transparent;
+    border-width: 0;
+    border-radius: 0;
+    padding: 0;
+    margin-left: 4px;
+}
+
 .dennoko-root .unity-toggle .unity-toggle__checkmark {
     background-color: var(--dennoko-accent); /* 中の背景は白で固定 */
     background-image: none;                  /* スキンの箱込み画像を破棄 */
@@ -218,12 +250,10 @@
 }
 
 .dennoko-root .unity-toggle:checked .unity-toggle__checkmark {
-    /* チェックグリフのみのアイコンを暗色 tint (乗算) で黒く沈めて重ねる。
-       白背景 × 黒グリフなのでテーマ非依存で視認できる。
-       ※アイコン名は要実機確認。表示されない場合の代替候補:
-       resource("TestPassed") / resource("Installed") */
-    background-image: resource("d_Valid");
-    -unity-background-image-tint-color: var(--dennoko-surface-0);
+    /* チェックグリフのみのアイコンを暗色 tint (乗算) で濃い黒に沈めて重ねる。
+       白背景 × 濃黒グリフなのでテーマ非依存でクッキリ視認できる。 */
+    background-image: resource("d_checkmark");
+    -unity-background-image-tint-color: #000000;
 }
 
 /* ─── ⑤ フォールドアウト (Foldout) ───────────────────────── */

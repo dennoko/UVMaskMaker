@@ -111,67 +111,6 @@ namespace Dennoko.UVTools
         private static string LogDir  => Path.Combine(Application.dataPath, "../Logs/MaskMaker");
         private static string LogPath => Path.Combine(LogDir, "MaskMaker.log");
 
-        // ─── 標準フォント: OS のメイリオ ─────────────────────────────────
-        // フォントアセットを同梱せず、端末インストール済みのメイリオを動的参照する。
-        // ⚠ UI Toolkit のテキストは TextCore で描画されるため、レガシー Font
-        //   (Font.CreateDynamicFontFromOSFont) を FontDefinition.FromFont() で渡すと
-        //   グリフ生成に失敗し文字が一切表示されなくなる。必ず OS フォントから
-        //   直接 SDF FontAsset を生成すること。
-        // 未搭載環境 (Mac/Linux 等) では null を返し、エディタ標準フォントのままになる。
-        private const string UI_FONT_FAMILY = "Meiryo";
-        private static UnityEngine.TextCore.Text.FontAsset _uiFontAsset;
-        private static bool _uiFontSearched;
-
-        private static UnityEngine.TextCore.Text.FontAsset GetUIFontAsset()
-        {
-            if (_uiFontSearched) return _uiFontAsset;
-            _uiFontSearched = true;
-
-            try
-            {
-                _uiFontAsset = UnityEngine.TextCore.Text.FontAsset.CreateFontAsset(UI_FONT_FAMILY, "Regular");
-                if (_uiFontAsset != null)
-                {
-                    MarkFontAssetDontSave(_uiFontAsset);
-                }
-            }
-            catch
-            {
-                _uiFontAsset = null;
-            }
-            return _uiFontAsset;
-        }
-
-        /// <summary>
-        /// 動的生成した FontAsset とその内部オブジェクト（アトラス用 material / atlasTextures）に
-        /// HideAndDontSave を伝播させる。
-        ///
-        /// FontAsset.CreateFontAsset で実行時に生成されるフォントアトラスの material と Texture2D は
-        /// FontAsset 本体とは別の UnityEngine.Object であり、hideFlags は自動では伝播しない。
-        /// これらを放置すると「どのアセットからも参照されない一時オブジェクト」と見なされ、
-        /// Resources.UnloadUnusedAssets()（PNG エクスポート後の AssetDatabase.Refresh、プレイモード
-        /// 遷移、シーン保存などで暗黙的に呼ばれる）で破棄される。すると FontAsset は破棄済み material を
-        /// 参照し続け、次のテキスト描画で Material.get_mainTexture が MissingReferenceException を投げ、
-        /// UI のテキストが崩れる。material/atlasTextures にも DontSave を付けて破棄を防ぐ。
-        /// </summary>
-        private static void MarkFontAssetDontSave(UnityEngine.TextCore.Text.FontAsset fontAsset)
-        {
-            fontAsset.hideFlags = HideFlags.HideAndDontSave;
-
-            if (fontAsset.material != null)
-                fontAsset.material.hideFlags = HideFlags.HideAndDontSave;
-
-            var atlasTextures = fontAsset.atlasTextures;
-            if (atlasTextures != null)
-            {
-                foreach (var tex in atlasTextures)
-                {
-                    if (tex != null)
-                        tex.hideFlags = HideFlags.HideAndDontSave;
-                }
-            }
-        }
-
         // ─────────────────────────────────────────────────────────────────────
         [MenuItem("dennokoworks/MaskMaker")]
         public static void ShowWindow()
@@ -351,12 +290,9 @@ namespace Dennoko.UVTools
             root.style.backgroundColor = (Color)new Color32(0x12, 0x12, 0x12, 0xFF);
             root.style.flexGrow = 1;
 
-            // 標準フォント: OS のメイリオが使えれば全体に適用
-            var uiFontAsset = GetUIFontAsset();
-            if (uiFontAsset != null)
-            {
-                root.style.unityFontDefinition = FontDefinition.FromSDFFont(uiFontAsset);
-            }
+            // 標準フォント: OS のメイリオを全体に適用（全テキスト要素へ継承される）。
+            // 生成・アトラス保護・キャッシュ消失時の再適用はすべて DennokoUIFont が行う。
+            DennokoUIFont.Apply(root);
 
             // USS のロードと適用 (テーマ + ツール固有)
             LoadStyleSheet(root, THEME_USS_GUID);
