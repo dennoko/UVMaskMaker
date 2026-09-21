@@ -57,6 +57,7 @@ namespace Dennoko.UVTools
         // ── UI: selection card ───────────────────────────────────────────────
         private VisualElement _selectionCard;
         private Label  _selectionTitle;
+        private Button _granIslandBtn, _granConnectedBtn, _granPolygonBtn;
         private Button _modeAddBtn, _modeRemoveBtn;
         private Button _invertBtn, _selectAllBtn, _clearSelectionBtn;
         private Button _pausePickBtn;
@@ -387,6 +388,9 @@ namespace Dennoko.UVTools
             // ── Selection card ──────────────────────────────────────────────
             _selectionCard     = root.Q<VisualElement>("selection-card");
             _selectionTitle    = root.Q<Label>("selection-title");
+            _granIslandBtn     = root.Q<Button>("granularity-island-btn");
+            _granConnectedBtn  = root.Q<Button>("granularity-connected-btn");
+            _granPolygonBtn    = root.Q<Button>("granularity-polygon-btn");
             _modeAddBtn        = root.Q<Button>("mode-add-btn");
             _modeRemoveBtn     = root.Q<Button>("mode-remove-btn");
             _invertBtn         = root.Q<Button>("invert-btn");
@@ -394,6 +398,9 @@ namespace Dennoko.UVTools
             _clearSelectionBtn = root.Q<Button>("clear-selection-btn");
             _pausePickBtn      = root.Q<Button>("pause-pick-btn");
 
+            _granIslandBtn.clicked    += () => SetGranularity(SelectionGranularity.UVIsland);
+            _granConnectedBtn.clicked += () => SetGranularity(SelectionGranularity.ConnectedMesh);
+            _granPolygonBtn.clicked   += () => SetGranularity(SelectionGranularity.Polygon);
             _modeAddBtn.clicked    += () => SetAddMode(true);
             _modeRemoveBtn.clicked += () => SetAddMode(false);
             _invertBtn.clicked         += InvertSelection;
@@ -467,7 +474,13 @@ namespace Dennoko.UVTools
             _subEraserBtn.text  = _localization.Get("tool_eraser", "Eraser");
             _brushSizeLabel.text = _localization.Get("brush_size", "Size");
 
-            _selectionTitle.text = _localization.Get("island_selection", "アイランド選択");
+            _selectionTitle.text = _localization.Get("selection_title", "選択");
+            _granIslandBtn.text       = GranularityLabel(SelectionGranularity.UVIsland);
+            _granIslandBtn.tooltip    = _localization.Get("granularity_island_tooltip", "UVアイランド単位で選択します。");
+            _granConnectedBtn.text    = GranularityLabel(SelectionGranularity.ConnectedMesh);
+            _granConnectedBtn.tooltip = _localization.Get("granularity_connected_tooltip", "頂点でつながったメッシュ単位で選択します。");
+            _granPolygonBtn.text      = GranularityLabel(SelectionGranularity.Polygon);
+            _granPolygonBtn.tooltip   = _localization.Get("granularity_polygon_tooltip", "ポリゴン (三角形) 単位で選択します。");
             _modeAddBtn.text        = _localization["mode_add"];
             _modeAddBtn.tooltip     = _localization["mode_add_tooltip"];
             _modeRemoveBtn.text     = _localization["mode_remove"];
@@ -540,6 +553,10 @@ namespace Dennoko.UVTools
             _brushSizeLabel.SetEnabled(usesSize);
             _brushSizeSlider.SetEnabled(usesSize);
 
+            _granIslandBtn.EnableInClassList("dennoko-button-active", _settings.Granularity == SelectionGranularity.UVIsland);
+            _granConnectedBtn.EnableInClassList("dennoko-button-active", _settings.Granularity == SelectionGranularity.ConnectedMesh);
+            _granPolygonBtn.EnableInClassList("dennoko-button-active", _settings.Granularity == SelectionGranularity.Polygon);
+
             _modeAddBtn.EnableInClassList("dennoko-button-active", _settings.AddMode);
             _modeRemoveBtn.EnableInClassList("dennoko-button-active", !_settings.AddMode);
 
@@ -610,6 +627,41 @@ namespace Dennoko.UVTools
             _settings.PaintSubMode = mode;
             _settingsManager.Save(_settings);
             RefreshModeUI();
+        }
+
+        /// <summary>
+        /// Switches the selection unit. The current selection is carried over: a group of the new
+        /// granularity stays selected only if all of its triangles were selected before.
+        /// </summary>
+        private void SetGranularity(SelectionGranularity granularity)
+        {
+            if (_settings.Granularity == granularity) return;
+            var previous = _settings.Granularity;
+            _settings.Granularity = granularity;
+            _settingsManager.Save(_settings);
+
+            if (_analysis != null)
+            {
+                _selectedGroups = _analysis.ConvertSelection(_selectedGroups, previous, granularity);
+                _preview?.SetSelection(_selectedGroups);
+                _preview?.MarkDirty();
+                SceneView.RepaintAll();
+                SetStatus(string.Format(
+                    _localization.Get("status_granularity_changed", "選択単位: {0} ({1})"),
+                    GranularityLabel(granularity), CurrentGroups.Count), StatusType.Info);
+            }
+            RefreshModeUI();
+            Log($"[Granularity] {previous} -> {granularity}, selected={_selectedGroups.Count}");
+        }
+
+        private string GranularityLabel(SelectionGranularity granularity)
+        {
+            switch (granularity)
+            {
+                case SelectionGranularity.ConnectedMesh: return _localization.Get("granularity_connected", "接続メッシュ");
+                case SelectionGranularity.Polygon:       return _localization.Get("granularity_polygon", "ポリゴン");
+                default:                                 return _localization.Get("granularity_island", "UVアイランド");
+            }
         }
 
         private void SetAddMode(bool add)
@@ -808,8 +860,10 @@ namespace Dennoko.UVTools
             BakeCurrentPoseAuto();
             RefreshTargetDependentUI();
             string msg = string.Format(
-                _localization.Get("status_analyzed", "解析完了: {0} アイランド"),
-                _analysis.GetGroups(SelectionGranularity.UVIsland).Count);
+                _localization.Get("status_analyzed", "解析完了: {0} アイランド / {1} メッシュ / {2} ポリゴン"),
+                _analysis.GetGroups(SelectionGranularity.UVIsland).Count,
+                _analysis.GetGroups(SelectionGranularity.ConnectedMesh).Count,
+                _analysis.GetGroups(SelectionGranularity.Polygon).Count);
             SetStatus(msg, StatusType.Success);
             Log($"[Analyze] Found {_analysis.GetGroups(SelectionGranularity.UVIsland).Count} UV islands, "
                 + $"{_analysis.GetGroups(SelectionGranularity.ConnectedMesh).Count} connected meshes, "

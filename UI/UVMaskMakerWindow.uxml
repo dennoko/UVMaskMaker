@@ -94,10 +94,16 @@
                     <ui:Button name="import-load-btn" text="Load Mask" class="dennoko-button-secondary" />
                 </ui:VisualElement>
 
-                <!-- STEP 2: アイランド選択 -->
+                <!-- STEP 2: 選択 -->
                 <ui:VisualElement name="selection-card" class="dennoko-card">
-                    <ui:Label name="selection-title" text="ISLAND SELECTION"
+                    <ui:Label name="selection-title" text="SELECTION"
                         class="dennoko-section-title dennoko-card-header" />
+                    <ui:VisualElement class="maskmaker-row">
+                        <ui:Button name="granularity-island-btn" text="UV Island" class="maskmaker-grow" />
+                        <ui:Button name="granularity-connected-btn" text="Connected" class="maskmaker-grow" />
+                        <ui:Button name="granularity-polygon-btn" text="Polygon" class="maskmaker-grow" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="dennoko-separator" />
                     <ui:VisualElement class="maskmaker-row maskmaker-row--center">
                         <ui:Button name="mode-add-btn" text="Add" class="maskmaker-mode-btn" />
                         <ui:Button name="mode-remove-btn" text="Remove" class="maskmaker-mode-btn" />
