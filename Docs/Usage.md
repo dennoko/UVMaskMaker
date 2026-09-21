@@ -5,7 +5,7 @@ This document explains how to use **MaskMaker** (`dennokoworks > MaskMaker`). It
 ---
 
 ## Key Features
-- **UV Island Selection**: Select directly by clicking the mesh in the Scene View or the Preview area.
+- **UV Island / Connected Mesh / Polygon Selection**: Select directly by clicking the mesh in the Scene View or the Preview area. Three selection units are available.
 - **Hand-painting**: Use the brush tool on the preview to freely paint masks. Can be combined with island selection for merged output.
 - **Mask Image Import**: Load an existing mask image and use its black regions as hand-painted areas, allowing you to resume editing from a previously exported mask.
 - **Automatic UV Analysis**: UV layout is automatically analyzed when the target is set, allowing you to start working immediately.
@@ -27,13 +27,14 @@ This document explains how to use **MaskMaker** (`dennokoworks > MaskMaker`). It
    - *Note: A working copy (`[WorkCopy]`) is created by default.*
 4. *(Optional)* To start from an existing mask, drag and drop the mask image PNG into the `Import Mask Image` card and click **Load Mask**. See [Import Mask Image](#15-import-mask-image) for details.
 
-### STEP 2: Island Selection & Painting
-1. Click the mesh in the Scene View or the `PREVIEW` area at the top of the window to select islands.
-2. Toggle between **Add** mode (add to selection) and **Remove** mode (deselect).
+### STEP 2: Selection & Painting
+1. Choose the selection unit (**UV Island** / **Connected** / **Polygon**). See [2. Selection](#2-selection) for details.
+2. Click the mesh in the Scene View or the `PREVIEW` area at the top of the window to select.
+3. Toggle between **Add** mode (add to selection) and **Remove** mode (deselect).
    - You can quickly switch modes with a hotkey (default `R`).
    - Click the **Pause Scene Picking** button to temporarily disable MaskMaker's click detection on the scene view, allowing standard Unity selections and operations (e.g. using transform handles).
-3. Use the `Invert`, `Select All`, and `Clear` buttons for batch operations.
-4. **Paint Mode**: Select "Paint" in the toolbar below the preview to directly paint masks using various tools.
+4. Use the `Invert`, `Select All`, and `Clear` buttons for batch operations.
+5. **Paint Mode**: Select "Paint" in the toolbar below the preview to directly paint masks using various tools.
    - **Tool Types**:
      - **Brush**: Freehand drawing.
      - **Rect**: Fills a rectangular area.
@@ -72,20 +73,27 @@ This allows you to resume editing from a previously exported mask PNG instead of
 
 > **Tips**: After loading, switch to Paint mode to fine-tune the imported areas with the brush or eraser.
 
-### 2. Island Selection
+### 2. Selection
+- **Selection Unit**: Chooses what a single click selects.
+  - **UV Island**: Triangles connected through edges whose endpoints share both position and UV. Sharp edges (split normals) do not break an island.
+  - **Connected**: The whole connected mesh. Triangles sharing vertex positions form one group even across UV seams (parts touching at a single point are grouped too).
+  - **Polygon**: Individual triangles. Unity meshes are triangulated, so a quad is treated as two triangles.
+  - No unit ever groups triangles across submeshes (materials).
+  - **Carrying over the selection**: When switching units, an element stays selected only if all of its triangles were selected. Switching to a finer unit (e.g. UV Island → Polygon) keeps the selection intact; switching to a coarser unit (e.g. Polygon → UV Island) deselects partially selected elements.
 - **Add / Remove**: Switches the basic behavior upon clicking.
 - **Selection Count**: Displays the number of currently selected islands.
 - **Pause / Resume Scene Picking**: Temporarily disables clicking on the scene view to select islands, leaving clicks to default Unity operations (such as selecting other objects or using transform handles).
 - **Batch Action Buttons**:
-  - **Invert**: Selects unselected islands and deselects selected ones.
-  - **Select All**: Selects all islands.
-  - **Clear**: Deselects all islands.
+  - **Invert**: Selects unselected elements and deselects selected ones.
+  - **Select All**: Selects all elements.
+  - **Clear**: Deselects everything.
 
 ### 3. PREVIEW
 - Displays the analyzed UVs.
 - **View Controls**: Use the mouse wheel to zoom and right-drag to pan.
 - **size reset**: Resets the view to the initial position.
-- You can also click directly here to select or deselect islands.
+- You can also click directly here to select or deselect (using the current selection unit).
+  - *Note: In Polygon mode, very small triangles may not be clickable on the preview. Use the Scene View in that case.*
 
 #### Hand-painting Details
 In addition to island-based selection, you can draw freely on a pixel-by-pixel basis.

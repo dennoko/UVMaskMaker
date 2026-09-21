@@ -9,7 +9,8 @@
 - Black Threshold: 取り込み時の黒判定しきい値を調整（0〜255）。アンチエイリアス等の調整に有用
 
 編集モード (Edit Mode)
-- Select (選択): UVアイランド単位の操作
+- Select (選択): クリックによる選択操作
+  - 選択単位: UVアイランド / 接続メッシュ / ポリゴン を切り替え（切替時は全三角形が選択済みの要素のみ選択を維持）
   - Add / Remove: クリック時の選択/解除動作の切り替え
   - ホットキー: モード切替に使用するキー（デフォルト: R / 環境設定で変更可能）
 - Paint (ペイント): プレビュー上でのピクセル単位の描画操作
@@ -22,9 +23,9 @@
 
 選択操作 (Selection Actions)
 - Analyze UVs: 現在のメッシュと設定でUV解析を実行（初回や設定変更時に実行）
-- Invert: 現在の選択状態（アイランド単位）を反転
-- Select All: すべてのアイランドを選択
-- Clear: 全アイランドの選択を解除
+- Invert: 現在の選択状態（選択単位ごと）を反転
+- Select All: すべての要素を選択
+- Clear: すべての選択を解除
 
 UVプレビュー (UV Preview)
 - UV表示: 展開図を表示し、クリックでの選択も可能
@@ -72,7 +73,8 @@ Import Mask Image
 - Black Threshold: Adjust the threshold for black detection (0-255). Useful for handling AA or gray edges
 
 Edit Mode
-- Select: UV island-based operations
+- Select: Click-based selection
+  - Selection Unit: Switch between UV Island / Connected Mesh / Polygon (on switch, only elements whose triangles were all selected stay selected)
   - Add / Remove: Toggle between selecting and deselecting on click
   - Hotkey: Key used to switch modes (Default: R / Customizable in Preferences)
 - Paint: Pixel-based drawing on the preview
@@ -85,9 +87,9 @@ Edit Mode
 
 Selection Actions
 - Analyze UVs: Analyze UVs with current settings (Run initially or after changing settings)
-- Invert: Invert current island selection
-- Select All: Select all islands
-- Clear: Deselect all islands
+- Invert: Invert current selection (per selection unit)
+- Select All: Select all elements
+- Clear: Deselect everything
 
 UV Preview
 - UV Display: Shows the UV layout; clickable for selection

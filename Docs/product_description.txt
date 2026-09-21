@@ -13,7 +13,7 @@
 3. （任意）既存マスクの読み込み
    - `Import Mask Image` 枠に画像をセットし「マスクを読み込む」をクリックすることで、以前のマスクを起点に編集を再開できます
 4. 編集モードの選択
-   - **選択モード**: `Add`（追加）か `Remove`（削除）を選び、シーンやプレビュー上でUVアイランドを選択
+   - **選択モード**: 選択単位（UVアイランド / 接続メッシュ / ポリゴン）と `Add`（追加）か `Remove`（削除）を選び、シーンやプレビュー上で選択
    - **ペイントモード**: ブラシ、矩形、投げ縄ツールを使用して、プレビュー上でピクセル単位の自由な描画が可能
 5. ツール等の切替
    - ホットキー（デフォルト `R`）で選択モードのAdd/Removeを切り替え
@@ -48,7 +48,7 @@ Basic Steps
 3. (Optional) Import existing mask
    - Set an image in the `Import Mask Image` section and click "Load Mask" to resume editing from a previous mask
 4. Choose Edit Mode
-   - **Select Mode**: Choose `Add` or `Remove` and click on UV islands in the Scene view or Preview
+   - **Select Mode**: Choose the selection unit (UV Island / Connected Mesh / Polygon) and `Add` or `Remove`, then click in the Scene view or Preview
    - **Paint Mode**: Use Brush, Rect, or Lasso tools for free-hand pixel drawing on the preview
 5. Switching Tools/Modes
    - Use the hotkey (default `R`) to toggle between Add/Remove in Select mode
