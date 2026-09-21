@@ -9,25 +9,25 @@ namespace Dennoko.UVTools
 {
     public static class UVVertexColorBaker
     {
-        // Build vertex colors (simple): selected islands -> black (0,0,0,1), others -> white (1,1,1,1)
-        public static Color32[] BuildVertexColors(UVAnalysis analysis, HashSet<int> selectedIslands, int vertexCount)
+        // Build vertex colors (simple): selected groups -> black (0,0,0,1), others -> white (1,1,1,1)
+        public static Color32[] BuildVertexColors(SelectionGroups groups, HashSet<int> selectedGroups, int vertexCount)
         {
             var colors = new Color32[vertexCount];
             var white = new Color32(255, 255, 255, 255);
             for (int i = 0; i < vertexCount; i++) colors[i] = white;
 
-            if (analysis == null || analysis.Triangles == null) return colors;
+            if (groups == null || selectedGroups == null) return colors;
 
-            foreach (var tri in analysis.Triangles)
+            foreach (int g in selectedGroups)
             {
-                int isl;
-                if (!analysis.TriangleToIsland.TryGetValue(tri.triIndex, out isl)) continue;
-                bool selected = selectedIslands != null && selectedIslands.Contains(isl);
-                if (!selected) continue;
-                // Selected triangle -> set its vertices to black
-                colors[tri.v0] = new Color32(0, 0, 0, 255);
-                colors[tri.v1] = new Color32(0, 0, 0, 255);
-                colors[tri.v2] = new Color32(0, 0, 0, 255);
+                if (g < 0 || g >= groups.Count) continue;
+                foreach (var tri in groups.Groups[g].Triangles)
+                {
+                    // Selected triangle -> set its vertices to black
+                    colors[tri.v0] = new Color32(0, 0, 0, 255);
+                    colors[tri.v1] = new Color32(0, 0, 0, 255);
+                    colors[tri.v2] = new Color32(0, 0, 0, 255);
+                }
             }
             return colors;
         }
@@ -36,8 +36,8 @@ namespace Dennoko.UVTools
         // - If baseColors provided (length==vertexCount), only overwrite selected vertices; others remain base.
         // - If baseColors null or wrong length, treat base as white and write full mask.
         public static Color32[] BuildVertexColorsChannelWise(
-            UVAnalysis analysis,
-            HashSet<int> selectedIslands,
+            SelectionGroups groups,
+            HashSet<int> selectedGroups,
             int vertexCount,
             Color32[] baseColors,
             bool writeR, bool writeG, bool writeB, bool writeA)
@@ -54,15 +54,17 @@ namespace Dennoko.UVTools
 
             // Build per-vertex selection mask from selected triangles
             var selVert = new bool[vertexCount];
-            if (analysis != null && analysis.Triangles != null && selectedIslands != null && selectedIslands.Count > 0)
+            if (groups != null && selectedGroups != null && selectedGroups.Count > 0)
             {
-                foreach (var tri in analysis.Triangles)
+                foreach (int g in selectedGroups)
                 {
-                    if (!analysis.TriangleToIsland.TryGetValue(tri.triIndex, out int isl)) continue;
-                    if (!selectedIslands.Contains(isl)) continue;
-                    if ((uint)tri.v0 < selVert.Length) selVert[tri.v0] = true;
-                    if ((uint)tri.v1 < selVert.Length) selVert[tri.v1] = true;
-                    if ((uint)tri.v2 < selVert.Length) selVert[tri.v2] = true;
+                    if (g < 0 || g >= groups.Count) continue;
+                    foreach (var tri in groups.Groups[g].Triangles)
+                    {
+                        if ((uint)tri.v0 < selVert.Length) selVert[tri.v0] = true;
+                        if ((uint)tri.v1 < selVert.Length) selVert[tri.v1] = true;
+                        if ((uint)tri.v2 < selVert.Length) selVert[tri.v2] = true;
+                    }
                 }
             }
 

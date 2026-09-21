@@ -19,20 +19,20 @@ namespace Dennoko.UVTools.Services
         /// Exports the mask to a PNG file.
         /// </summary>
         public bool Export(
-            UVAnalysis analysis,
-            HashSet<int> selectedIslands,
+            SelectionGroups groups,
+            HashSet<int> selectedGroups,
             ExportSettings settings,
             string path)
         {
-            if (analysis == null || string.IsNullOrEmpty(path))
+            if (groups == null || string.IsNullOrEmpty(path))
                 return false;
 
             try
             {
                 int size = Mathf.Clamp(settings.TextureSize, 8, 8192);
                 var mask = MaskBuilder.BuildProcessedMask(
-                    analysis,
-                    selectedIslands,
+                    groups,
+                    selectedGroups,
                     size,
                     size,
                     settings.PixelMargin,

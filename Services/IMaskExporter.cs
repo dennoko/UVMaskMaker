@@ -23,14 +23,14 @@ namespace Dennoko.UVTools.Services
         /// <summary>
         /// Exports the mask to a file.
         /// </summary>
-        /// <param name="analysis">UV analysis result</param>
-        /// <param name="selectedIslands">Set of selected island indices</param>
+        /// <param name="groups">Selectable groups of the current granularity</param>
+        /// <param name="selectedGroups">Set of selected group indices</param>
         /// <param name="settings">Export settings</param>
         /// <param name="path">Output file path</param>
         /// <returns>True if export succeeded</returns>
         bool Export(
-            UVAnalysis analysis,
-            HashSet<int> selectedIslands,
+            SelectionGroups groups,
+            HashSet<int> selectedGroups,
             ExportSettings settings,
             string path);
     }

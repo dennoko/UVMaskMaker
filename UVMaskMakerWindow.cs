@@ -97,8 +97,11 @@ namespace Dennoko.UVTools
 
         // ── Computed / selection data ─────────────────────────────────────────
         private UVAnalysis   _analysis;
-        private HashSet<int> _selectedIslands = new HashSet<int>();
+        private HashSet<int> _selectedGroups = new HashSet<int>(); // indices into CurrentGroups
         private Mesh         _bakedMesh;
+
+        /// <summary>Selectable groups for the current granularity (null before analysis).</summary>
+        private SelectionGroups CurrentGroups => _analysis?.GetGroups(_settings.Granularity);
 
         // ── Asset references ─────────────────────────────────────────────────
         private Texture2D _basePNG;
@@ -336,7 +339,7 @@ namespace Dennoko.UVTools
             _preview.OnIslandClicked      += OnPreviewIslandClicked;
             _preview.OnPaintStrokeFinished += OnPaintStrokeFinished;
             _preview.OnViewChanged        += UpdateZoomLabel;
-            _preview.SetContext(_analysis, _selectedIslands, _settings, _maskPainter);
+            _preview.SetContext(_analysis, _selectedGroups, _settings, _maskPainter);
             RefreshPreviewBaseTexture();
 
             // ── Preview toolbar ─────────────────────────────────────────────
@@ -689,11 +692,11 @@ namespace Dennoko.UVTools
             _targetMesh      = null;
             _targetTransform = null;
             _analysis        = null;
-            _selectedIslands.Clear();
+            _selectedGroups.Clear();
             _pickingService.Cleanup();
             _overlayRenderer.InvalidateCache();
             _preview?.InvalidateLabelMap();
-            _preview?.SetContext(_analysis, _selectedIslands, _settings, _maskPainter);
+            _preview?.SetContext(_analysis, _selectedGroups, _settings, _maskPainter);
             _preview?.MarkDirty();
 
             if (_bakedMesh != null) { try { DestroyImmediate(_bakedMesh); } catch { } _bakedMesh = null; }
@@ -797,18 +800,21 @@ namespace Dennoko.UVTools
 
         private void OnAnalysisSuccess()
         {
-            _selectedIslands.Clear();
+            _selectedGroups.Clear();
             _overlayRenderer.InvalidateCache();
             _preview?.InvalidateLabelMap();
-            _preview?.SetContext(_analysis, _selectedIslands, _settings, _maskPainter);
+            _preview?.SetContext(_analysis, _selectedGroups, _settings, _maskPainter);
             _preview?.MarkDirty();
             BakeCurrentPoseAuto();
             RefreshTargetDependentUI();
             string msg = string.Format(
                 _localization.Get("status_analyzed", "解析完了: {0} アイランド"),
-                _analysis.Islands.Count);
+                _analysis.GetGroups(SelectionGranularity.UVIsland).Count);
             SetStatus(msg, StatusType.Success);
-            Log($"[Analyze] Found {_analysis.Islands.Count} UV islands, {_analysis.BorderEdges.Count} UV border edges");
+            Log($"[Analyze] Found {_analysis.GetGroups(SelectionGranularity.UVIsland).Count} UV islands, "
+                + $"{_analysis.GetGroups(SelectionGranularity.ConnectedMesh).Count} connected meshes, "
+                + $"{_analysis.GetGroups(SelectionGranularity.Polygon).Count} polygons, "
+                + $"{_analysis.BorderEdges.Count} UV border edges");
         }
 
         private void HandleAnalysisError(Exception ex)
@@ -852,10 +858,10 @@ namespace Dennoko.UVTools
         {
             if (_analysis == null) return;
             var newSel = new HashSet<int>();
-            for (int i = 0; i < _analysis.Islands.Count; i++)
-                if (!_selectedIslands.Contains(i)) newSel.Add(i);
-            _selectedIslands = newSel;
-            _preview?.SetSelection(_selectedIslands);
+            for (int i = 0; i < CurrentGroups.Count; i++)
+                if (!_selectedGroups.Contains(i)) newSel.Add(i);
+            _selectedGroups = newSel;
+            _preview?.SetSelection(_selectedGroups);
             _preview?.MarkDirty();
             SceneView.RepaintAll();
         }
@@ -863,15 +869,15 @@ namespace Dennoko.UVTools
         private void SelectAll()
         {
             if (_analysis == null) return;
-            _selectedIslands = new HashSet<int>(Enumerable.Range(0, _analysis.Islands.Count));
-            _preview?.SetSelection(_selectedIslands);
+            _selectedGroups = new HashSet<int>(Enumerable.Range(0, CurrentGroups.Count));
+            _preview?.SetSelection(_selectedGroups);
             _preview?.MarkDirty();
             SceneView.RepaintAll();
         }
 
         private void ClearSelection()
         {
-            _selectedIslands.Clear();
+            _selectedGroups.Clear();
             _preview?.MarkDirty();
             SceneView.RepaintAll();
         }
@@ -879,11 +885,11 @@ namespace Dennoko.UVTools
         private void OnPreviewIslandClicked(int islandIdx)
         {
             if (islandIdx < 0 || _analysis == null) return;
-            if (_selectedIslands.Contains(islandIdx)) _selectedIslands.Remove(islandIdx);
-            else _selectedIslands.Add(islandIdx);
+            if (_selectedGroups.Contains(islandIdx)) _selectedGroups.Remove(islandIdx);
+            else _selectedGroups.Add(islandIdx);
             _preview?.MarkDirty();
             SceneView.RepaintAll();
-            Log($"[PreviewClick] island={islandIdx} TOGGLE → {(_selectedIslands.Contains(islandIdx) ? "SELECTED" : "DESELECTED")}");
+            Log($"[PreviewClick] island={islandIdx} TOGGLE → {(_selectedGroups.Contains(islandIdx) ? "SELECTED" : "DESELECTED")}");
         }
 
         private void OnPaintStrokeFinished()
@@ -1044,7 +1050,7 @@ namespace Dennoko.UVTools
                 PaintMask = _maskPainter?.Mask
             };
 
-            if (_exporter.Export(_analysis, _selectedIslands, exportSettings, fullPath))
+            if (_exporter.Export(CurrentGroups, _selectedGroups, exportSettings, fullPath))
             {
                 Log($"[Save] Wrote PNG {fullPath}");
                 var obj = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(fullPath);
@@ -1067,7 +1073,7 @@ namespace Dennoko.UVTools
                     string dir      = Path.GetDirectoryName(fullPath);
                     string nameBase = Path.GetFileNameWithoutExtension(fullPath);
                     string invPath  = Path.Combine(dir, nameBase + "_inv.png").Replace('\\', '/');
-                    if (_exporter.Export(_analysis, _selectedIslands, invSettings, invPath))
+                    if (_exporter.Export(CurrentGroups, _selectedGroups, invSettings, invPath))
                         Log($"[Save] Wrote Inverted PNG {invPath}");
                 }
             }
@@ -1094,7 +1100,7 @@ namespace Dennoko.UVTools
                     : _targetMesh.colors32;
 
                 var colors  = UVVertexColorBaker.BuildVertexColorsChannelWise(
-                    _analysis, _selectedIslands, _targetMesh.vertexCount, baseColors,
+                    CurrentGroups, _selectedGroups, _targetMesh.vertexCount, baseColors,
                     _settings.WriteR, _settings.WriteG, _settings.WriteB, _settings.WriteA);
                 var colored = UVVertexColorBaker.CreateColoredMesh(_targetMesh, colors);
                 var folder  = UVVertexColorBaker.GetDefaultBakeFolderForMesh(_targetMesh);
@@ -1165,12 +1171,12 @@ namespace Dennoko.UVTools
             if (_analysis != null && !paused
                 && e.type == EventType.MouseDown && e.button == 0)
             {
-                var pickedIsland = _pickingService.TryPick(e.mousePosition, _analysis);
+                var pickedIsland = _pickingService.TryPick(e.mousePosition, CurrentGroups);
                 if (pickedIsland.HasValue)
                 {
                     int islandIdx = pickedIsland.Value;
-                    if (_settings.AddMode) _selectedIslands.Add(islandIdx);
-                    else _selectedIslands.Remove(islandIdx);
+                    if (_settings.AddMode) _selectedGroups.Add(islandIdx);
+                    else _selectedGroups.Remove(islandIdx);
                     _preview?.MarkDirty();
                     sv.Repaint();
                     Log($"[Pick] island={islandIdx} {(_settings.AddMode ? "ADD" : "REMOVE")}");

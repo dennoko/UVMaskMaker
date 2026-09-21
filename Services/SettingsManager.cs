@@ -22,6 +22,7 @@ namespace Dennoko.UVTools.Services
             public const string InvertMask = Prefix + "InvertMask";
             public const string LastSaveDir = Prefix + "LastSaveDir";
             public const string ModeToggleHotkey = Prefix + "ModeToggleHotkey";
+            public const string Granularity = Prefix + "Granularity";
             public const string UVChannel = Prefix + "UVChannel";
             public const string TargetSubmesh = Prefix + "TargetSubmesh";
             public const string OverlayOnTop = Prefix + "OverlayOnTop";
@@ -66,6 +67,10 @@ namespace Dennoko.UVTools.Services
             settings.InvertMask = EditorPrefs.GetBool(Keys.InvertMask, false);
             settings.OutputDir = EditorPrefs.GetString(Keys.LastSaveDir, "Assets/GeneratedMasks");
             settings.ModeToggleHotkey = (KeyCode)EditorPrefs.GetInt(Keys.ModeToggleHotkey, (int)KeyCode.R);
+            int granularity = EditorPrefs.GetInt(Keys.Granularity, (int)SelectionGranularity.UVIsland);
+            settings.Granularity = System.Enum.IsDefined(typeof(SelectionGranularity), granularity)
+                ? (SelectionGranularity)granularity
+                : SelectionGranularity.UVIsland;
             string uvStr = EditorUserSettings.GetConfigValue(Keys.UVChannel);
             settings.UVChannel = int.TryParse(uvStr, out int uv) ? uv : 0;
             string submeshStr = EditorUserSettings.GetConfigValue(Keys.TargetSubmesh);
@@ -114,6 +119,7 @@ namespace Dennoko.UVTools.Services
             EditorPrefs.SetBool(Keys.InvertMask, settings.InvertMask);
             EditorPrefs.SetString(Keys.LastSaveDir, settings.OutputDir);
             EditorPrefs.SetInt(Keys.ModeToggleHotkey, (int)settings.ModeToggleHotkey);
+            EditorPrefs.SetInt(Keys.Granularity, (int)settings.Granularity);
             EditorUserSettings.SetConfigValue(Keys.UVChannel, settings.UVChannel.ToString());
             EditorUserSettings.SetConfigValue(Keys.TargetSubmesh, settings.TargetSubmesh.ToString());
             EditorPrefs.SetBool(Keys.OverlayOnTop, settings.OverlayOnTop);

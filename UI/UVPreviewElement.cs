@@ -24,7 +24,7 @@ namespace Dennoko.UVTools.UI
 
         // --- Context (supplied by the window; not owned) ---
         private UVAnalysis _analysis;
-        private HashSet<int> _selectedIslands;
+        private HashSet<int> _selectedGroups;
         private MaskSettings _settings;
         private MaskPainter _painter;
         private Texture _baseTexture;
@@ -43,6 +43,7 @@ namespace Dennoko.UVTools.UI
         // --- Label map for click detection ---
         private int[] _labelMap;
         private int _labelMapSize = 0;
+        private SelectionGranularity _labelMapGranularity;
 
         // --- Viewport / zoom / pan state ---
         private float _zoomLevel = 1f;
@@ -135,11 +136,11 @@ namespace Dennoko.UVTools.UI
         /// selection set instance, settings or painter change. References are held;
         /// the window remains the owner.
         /// </summary>
-        public void SetContext(UVAnalysis analysis, HashSet<int> selectedIslands,
+        public void SetContext(UVAnalysis analysis, HashSet<int> selectedGroups,
             MaskSettings settings, MaskPainter painter)
         {
             _analysis = analysis;
-            _selectedIslands = selectedIslands;
+            _selectedGroups = selectedGroups;
             _settings = settings;
             _painter = painter;
             UpdateHintVisibility();
@@ -148,9 +149,9 @@ namespace Dennoko.UVTools.UI
         }
 
         /// <summary>Updates the selection set reference (window may reassign the HashSet).</summary>
-        public void SetSelection(HashSet<int> selectedIslands)
+        public void SetSelection(HashSet<int> selectedGroups)
         {
-            _selectedIslands = selectedIslands;
+            _selectedGroups = selectedGroups;
         }
 
         /// <summary>Base texture drawn under the overlay when PreviewOverlayBaseTex is on.</summary>
@@ -469,13 +470,13 @@ namespace Dennoko.UVTools.UI
 
             // Ensure textures and label map
             EnsureTextures(_settings.TextureSize);
-            EnsureLabelMap(_analysis, _settings.TextureSize);
+            EnsureLabelMap(_analysis, _settings.TextureSize, _settings.Granularity);
 
             // Lazy regeneration right before drawing (same semantics as the old
             // IMGUI implementation which regenerated on the Repaint event).
             if (_dirty)
             {
-                RegenerateTexturesFull(_analysis, _selectedIslands, _settings, _painter);
+                RegenerateTexturesFull(_analysis, _selectedGroups, _settings, _painter);
                 _dirty = false;
                 _paintDirty = false;
             }
@@ -780,12 +781,13 @@ namespace Dennoko.UVTools.UI
             }
         }
 
-        private void EnsureLabelMap(UVAnalysis analysis, int size)
+        private void EnsureLabelMap(UVAnalysis analysis, int size, SelectionGranularity granularity)
         {
-            if (_labelMap == null || _labelMapSize != size)
+            if (_labelMap == null || _labelMapSize != size || _labelMapGranularity != granularity)
             {
-                _labelMap = UVMaskExport.BuildLabelMapTransient(analysis, size, size);
+                _labelMap = UVMaskExport.BuildLabelMapTransient(analysis.GetGroups(granularity), size, size);
                 _labelMapSize = size;
+                _labelMapGranularity = granularity;
             }
         }
 
@@ -793,7 +795,7 @@ namespace Dennoko.UVTools.UI
         /// Full regeneration: rebuilds island mask from scratch, dilates it, then applies paint and invert.
         /// Called when selection/settings change or on stroke finish.
         /// </summary>
-        private void RegenerateTexturesFull(UVAnalysis analysis, HashSet<int> selectedIslands, MaskSettings settings, MaskPainter painter)
+        private void RegenerateTexturesFull(UVAnalysis analysis, HashSet<int> selectedGroups, MaskSettings settings, MaskPainter painter)
         {
             int size = settings.TextureSize;
             if (painter != null) painter.EnsureSize(size);
@@ -802,7 +804,7 @@ namespace Dennoko.UVTools.UI
             // The margin never touches hand-painted strokes, so the incremental paint path
             // can simply OR the paint layer on top of this cache.
             _cachedIslandMask = MaskBuilder.BuildIslandMaskWithMargin(
-                analysis, selectedIslands, size, size, settings.PixelMargin);
+                analysis.GetGroups(settings.Granularity), selectedGroups, size, size, settings.PixelMargin);
 
             // Working copy: merge paint + invert
             var mask = new byte[_cachedIslandMask.Length];
@@ -852,14 +854,14 @@ namespace Dennoko.UVTools.UI
             if (_cachedIslandMask == null || _cachedIslandMask.Length != size * size)
             {
                 // Fallback to full regen if no cache available
-                RegenerateTexturesFull(_analysis, _selectedIslands, settings, painter);
+                RegenerateTexturesFull(_analysis, _selectedGroups, settings, painter);
                 return;
             }
             int pixelCount = size * size;
             if (_cachedPixels == null || _cachedPixels.Length != pixelCount
                 || _cachedOverlayPixels == null || _cachedOverlayPixels.Length != pixelCount)
             {
-                RegenerateTexturesFull(_analysis, _selectedIslands, settings, painter);
+                RegenerateTexturesFull(_analysis, _selectedGroups, settings, painter);
                 return;
             }
 

@@ -55,14 +55,14 @@ namespace Dennoko.UVTools.Services
         }
 
         /// <summary>
-        /// Attempts to pick a UV island at the given GUI position.
+        /// Attempts to pick a selection group at the given GUI position.
         /// </summary>
         /// <param name="guiPos">Mouse position in GUI coordinates</param>
-        /// <param name="analysis">UV analysis result</param>
-        /// <returns>Island index if hit, null otherwise</returns>
-        public int? TryPick(Vector2 guiPos, UVAnalysis analysis)
+        /// <param name="groups">Selectable groups of the current granularity</param>
+        /// <returns>Group index if hit, null otherwise</returns>
+        public int? TryPick(Vector2 guiPos, SelectionGroups groups)
         {
-            if (_tempCollider == null || analysis == null) return null;
+            if (_tempCollider == null || groups == null) return null;
 
             Ray ray = HandleUtility.GUIPointToWorldRay(guiPos);
             if (Physics.Raycast(ray, out var hit, Mathf.Infinity))
@@ -70,9 +70,9 @@ namespace Dennoko.UVTools.Services
                 if (hit.collider != _tempCollider) return null;
 
                 int triIndex = hit.triangleIndex;
-                if (analysis.TriangleToIsland.TryGetValue(triIndex, out int islandIdx))
+                if (groups.TriangleToGroup.TryGetValue(triIndex, out int groupIdx))
                 {
-                    return islandIdx;
+                    return groupIdx;
                 }
             }
 

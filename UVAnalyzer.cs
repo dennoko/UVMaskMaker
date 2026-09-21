@@ -7,6 +7,27 @@ using UnityEngine;
 namespace Dennoko.UVTools
 {
     /// <summary>
+    /// Unit that a single click selects.
+    /// </summary>
+    public enum SelectionGranularity
+    {
+        UVIsland = 0,      // triangles connected through edges sharing position and UV
+        ConnectedMesh = 1, // triangles connected through shared vertex positions
+        Polygon = 2        // each triangle on its own
+    }
+
+    /// <summary>
+    /// Partition of the analyzed triangles into selectable groups for one granularity.
+    /// Selections are sets of indices into <see cref="Groups"/>.
+    /// </summary>
+    public class SelectionGroups
+    {
+        public List<UVIsland> Groups = new List<UVIsland>();
+        public Dictionary<int, int> TriangleToGroup = new Dictionary<int, int>(); // triIndex -> group index
+        public int Count => Groups.Count;
+    }
+
+    /// <summary>
     /// Holds the results of a UV analysis for a mesh.
     /// </summary>
     public class UVAnalysis
@@ -16,12 +37,46 @@ namespace Dennoko.UVTools
         public List<Vector2> UVs = new List<Vector2>();
         public int UVChannel = 0; // which UV channel was analyzed
         public List<UVTriangle> Triangles = new List<UVTriangle>();
-        public List<UVIsland> Islands = new List<UVIsland>();
         /// <summary>UV-space border edges — one entry per unique UV side of each seam/boundary edge. Used for UV preview drawing.</summary>
         public List<UVBorderEdge> BorderEdges = new List<UVBorderEdge>();
         /// <summary>Deduplicated 3D vertex-index pairs for all seam/boundary edges. Used for scene view drawing.</summary>
         public List<(int v0, int v1)> SeamEdges3D = new List<(int, int)>();
-        public Dictionary<int, int> TriangleToIsland = new Dictionary<int, int>(); // triIndex -> islandIndex
+
+        private readonly SelectionGroups[] _groups = { new SelectionGroups(), new SelectionGroups(), new SelectionGroups() };
+
+        public SelectionGroups GetGroups(SelectionGranularity granularity) => _groups[(int)granularity];
+
+        /// <summary>
+        /// Converts a selection between granularities. A target group is selected only when
+        /// every one of its triangles was selected in the source granularity, so moving to a finer
+        /// granularity keeps the selection intact while partially selected coarse groups are dropped.
+        /// </summary>
+        public HashSet<int> ConvertSelection(HashSet<int> selection, SelectionGranularity from, SelectionGranularity to)
+        {
+            if (from == to) return new HashSet<int>(selection);
+            var result = new HashSet<int>();
+            if (selection == null || selection.Count == 0) return result;
+
+            var src = GetGroups(from);
+            var selectedTris = new HashSet<int>();
+            foreach (int g in selection)
+            {
+                if (g < 0 || g >= src.Count) continue;
+                foreach (var tri in src.Groups[g].Triangles) selectedTris.Add(tri.triIndex);
+            }
+
+            var dst = GetGroups(to);
+            for (int g = 0; g < dst.Count; g++)
+            {
+                bool all = true;
+                foreach (var tri in dst.Groups[g].Triangles)
+                {
+                    if (!selectedTris.Contains(tri.triIndex)) { all = false; break; }
+                }
+                if (all) result.Add(g);
+            }
+            return result;
+        }
     }
 
     public struct UVTriangle
@@ -137,7 +192,14 @@ namespace Dennoko.UVTools
             BuildBorderEdges(analysis, triSubmesh, ids);
 
             var uvIslandOf = GroupUVIslands(analysis.Triangles, triSubmesh, ids, out int islandCount);
-            BuildGroups(analysis.Triangles, uvIslandOf, islandCount, analysis.Islands, analysis.TriangleToIsland);
+            BuildGroups(analysis.Triangles, uvIslandOf, islandCount, analysis.GetGroups(SelectionGranularity.UVIsland));
+
+            var connectedOf = GroupConnectedMeshes(analysis.Triangles, triSubmesh, ids, out int connectedCount);
+            BuildGroups(analysis.Triangles, connectedOf, connectedCount, analysis.GetGroups(SelectionGranularity.ConnectedMesh));
+
+            var polygonOf = new int[analysis.Triangles.Count];
+            for (int i = 0; i < polygonOf.Length; i++) polygonOf[i] = i;
+            BuildGroups(analysis.Triangles, polygonOf, polygonOf.Length, analysis.GetGroups(SelectionGranularity.Polygon));
         }
 
         /// <summary>
@@ -255,18 +317,43 @@ namespace Dennoko.UVTools
         }
 
         /// <summary>
+        /// Groups triangles into connected meshes: triangles sharing any vertex position
+        /// (within the same submesh) belong to the same group.
+        /// Returns the group id per entry of <paramref name="triangles"/>.
+        /// </summary>
+        private static int[] GroupConnectedMeshes(List<UVTriangle> triangles, List<int> triSubmesh, VertexIds ids, out int groupCount)
+        {
+            var uf = new UnionFind(triangles.Count);
+            var firstTriOfVertex = new Dictionary<(int, int), int>(triangles.Count * 2);
+            void Link(int i, int sub, int v)
+            {
+                var key = (ids.Pos[v], sub);
+                if (firstTriOfVertex.TryGetValue(key, out int other)) uf.Union(i, other);
+                else firstTriOfVertex[key] = i;
+            }
+            for (int i = 0; i < triangles.Count; i++)
+            {
+                var tr = triangles[i];
+                int sub = triSubmesh[i];
+                Link(i, sub, tr.v0);
+                Link(i, sub, tr.v1);
+                Link(i, sub, tr.v2);
+            }
+            return uf.Compact(out groupCount);
+        }
+
+        /// <summary>
         /// Materializes group lists and the triangle -> group lookup from per-triangle group ids.
         /// </summary>
-        private static void BuildGroups(List<UVTriangle> triangles, int[] groupOf, int groupCount,
-            List<UVIsland> groups, Dictionary<int, int> triangleToGroup)
+        private static void BuildGroups(List<UVTriangle> triangles, int[] groupOf, int groupCount, SelectionGroups target)
         {
-            groups.Capacity = groupCount;
-            for (int g = 0; g < groupCount; g++) groups.Add(new UVIsland());
+            target.Groups.Capacity = groupCount;
+            for (int g = 0; g < groupCount; g++) target.Groups.Add(new UVIsland());
             for (int i = 0; i < triangles.Count; i++)
             {
                 int g = groupOf[i];
-                groups[g].Triangles.Add(triangles[i]);
-                triangleToGroup[triangles[i].triIndex] = g;
+                target.Groups[g].Triangles.Add(triangles[i]);
+                target.TriangleToGroup[triangles[i].triIndex] = g;
             }
         }
 

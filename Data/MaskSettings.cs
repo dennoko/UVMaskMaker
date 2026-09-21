@@ -33,6 +33,7 @@ namespace Dennoko.UVTools.Data
 
         // Mode settings
         public bool AddMode = true;
+        public SelectionGranularity Granularity = SelectionGranularity.UVIsland;
         public bool IsPaintMode = false;
         // シーンビューのクリック判定を一時停止する (true の間は Unity 標準の選択操作が行える)
         public bool ScenePickPaused = false;

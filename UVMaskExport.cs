@@ -9,11 +9,11 @@ namespace Dennoko.UVTools
 {
     public static class UVMaskExport
     {
-        // Build label map for the given analysis
-        public static int[] BuildLabelMapTransient(UVAnalysis analysis, int width, int height)
+        // Build label map (pixel -> group index) for the given groups
+        public static int[] BuildLabelMapTransient(SelectionGroups groups, int width, int height)
         {
             var labels = new int[width * height]; for (int i = 0; i < labels.Length; i++) labels[i] = -1;
-            foreach (var pair in analysis.Islands.Select((isl, idx) => new { isl, idx }))
+            foreach (var pair in groups.Groups.Select((isl, idx) => new { isl, idx }))
             {
                 foreach (var tri in pair.isl.Triangles) { RasterizeTriangleLabel(width, height, labels, pair.idx, tri.uv0, tri.uv1, tri.uv2); }
             }

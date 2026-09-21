@@ -12,27 +12,27 @@ namespace Dennoko.UVTools.Core
     public static class MaskBuilder
     {
         /// <summary>
-        /// Builds a union mask from selected UV islands.
+        /// Builds a union mask from selected groups.
         /// </summary>
-        /// <param name="analysis">UV analysis result</param>
-        /// <param name="selectedIslands">Set of selected island indices</param>
+        /// <param name="groups">Selectable groups of the current granularity</param>
+        /// <param name="selectedGroups">Set of selected group indices</param>
         /// <param name="width">Output mask width</param>
         /// <param name="height">Output mask height</param>
         /// <returns>Byte array where 255 = selected, 0 = unselected</returns>
-        public static byte[] BuildUnionMask(UVAnalysis analysis, HashSet<int> selectedIslands, int width, int height)
+        public static byte[] BuildUnionMask(SelectionGroups groups, HashSet<int> selectedGroups, int width, int height)
         {
             var mask = new byte[width * height];
             Array.Clear(mask, 0, mask.Length);
 
-            if (analysis == null || selectedIslands == null || selectedIslands.Count == 0)
+            if (groups == null || selectedGroups == null || selectedGroups.Count == 0)
                 return mask;
 
-            foreach (var islandIdx in selectedIslands)
+            foreach (var groupIdx in selectedGroups)
             {
-                if (islandIdx < 0 || islandIdx >= analysis.Islands.Count) continue;
+                if (groupIdx < 0 || groupIdx >= groups.Count) continue;
 
-                var island = analysis.Islands[islandIdx];
-                foreach (var tri in island.Triangles)
+                var group = groups.Groups[groupIdx];
+                foreach (var tri in group.Triangles)
                 {
                     RasterizeTriangleToMask(width, height, mask, tri.uv0, tri.uv1, tri.uv2);
                 }
@@ -76,13 +76,13 @@ namespace Dennoko.UVTools.Core
         /// so painted strokes keep exactly the extent the user drew.
         /// </summary>
         public static byte[] BuildIslandMaskWithMargin(
-            UVAnalysis analysis,
-            HashSet<int> selectedIslands,
+            SelectionGroups groups,
+            HashSet<int> selectedGroups,
             int width,
             int height,
             int pixelMargin)
         {
-            var mask = BuildUnionMask(analysis, selectedIslands, width, height);
+            var mask = BuildUnionMask(groups, selectedGroups, width, height);
             if (pixelMargin > 0)
             {
                 DilateMask(mask, width, height, pixelMargin);
@@ -105,23 +105,23 @@ namespace Dennoko.UVTools.Core
         /// <summary>
         /// Builds complete mask with all processing steps applied.
         /// </summary>
-        /// <param name="analysis">UV analysis result</param>
-        /// <param name="selectedIslands">Set of selected island indices</param>
+        /// <param name="groups">Selectable groups of the current granularity</param>
+        /// <param name="selectedGroups">Set of selected group indices</param>
         /// <param name="width">Output mask width</param>
         /// <param name="height">Output mask height</param>
         /// <param name="pixelMargin">Number of pixels to dilate the island mask by (hand-painted strokes are not dilated)</param>
         /// <param name="invertMask">Whether to invert the mask</param>
         /// <returns>Processed byte mask</returns>
         public static byte[] BuildProcessedMask(
-            UVAnalysis analysis,
-            HashSet<int> selectedIslands,
+            SelectionGroups groups,
+            HashSet<int> selectedGroups,
             int width,
             int height,
             int pixelMargin,
             bool invertMask,
             byte[] paintMask = null)
         {
-            var mask = BuildIslandMaskWithMargin(analysis, selectedIslands, width, height, pixelMargin);
+            var mask = BuildIslandMaskWithMargin(groups, selectedGroups, width, height, pixelMargin);
             return ComposeFinalMask(mask, paintMask, invertMask);
         }
 
